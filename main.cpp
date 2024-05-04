@@ -115,37 +115,38 @@ void* userInput(void* arg) {
     void **args = (void**) arg;
     sf::CircleShape* pacman_shape = (sf::CircleShape*) args[0];
     sf::Event* event = (sf::Event*) args[1];
+    Keyboard::Key Prevkey = Keyboard::Unknown;
     while (true) 
     {
+            if(event->key.code == sf::Keyboard::Up || event->key.code == sf::Keyboard::Down || event->key.code == sf::Keyboard::Left || event->key.code == sf::Keyboard::Right)
+            {
+                Prevkey = event->key.code;
+            }
     // Wait for user input event
-        pthread_mutex_lock(&inputMutex);
         if (event->type == sf::Event::Closed)
         {
             // Exit thread if window is closed
             pthread_mutex_unlock(&inputMutex);
             pthread_exit(NULL);
         }
-        if (event->type == sf::Event::KeyPressed) 
+        switch(Prevkey)
         {
-            switch(event->key.code)
-            {
-                case sf::Keyboard::Up:
-                    pacman_shape->move(0, CELL_SIZE * -1);
-                    break;
-                case sf::Keyboard::Down:
-                    pacman_shape->move(0, CELL_SIZE);
-                    break;
-                case sf::Keyboard::Left:
-                    pacman_shape->move(CELL_SIZE*-1, 0);
-                    break;
-                case sf::Keyboard::Right:
-                    pacman_shape->move(CELL_SIZE, 0);
-                    break;
-            }
+            case sf::Keyboard::Up:
+                pacman_shape->move(0, CELL_SIZE * -1);
+                break;
+            case sf::Keyboard::Down:
+                pacman_shape->move(0, CELL_SIZE);
+                break;
+            case sf::Keyboard::Left:
+                pacman_shape->move(CELL_SIZE*-1, 0);
+                break;
+            case sf::Keyboard::Right:
+                pacman_shape->move(CELL_SIZE, 0);
+                break;
         }
+    
         event->key.code = sf::Keyboard::Unknown;
-        pthread_mutex_unlock(&inputMutex);
-        sleep(sf::milliseconds(100));
+        sleep(sf::milliseconds(200));
     }
 
 }
@@ -187,12 +188,10 @@ int main() {
     // Main loop
     while (window.isOpen()) {
         // Process SFML events
-        pthread_mutex_lock(&inputMutex);
         while (window.pollEvent(event)) {
             if (event.type == Event::Closed)
                 window.close();
         }
-        pthread_mutex_unlock(&inputMutex);
 
         // Clear, draw, and display
         window.clear();
