@@ -35,29 +35,66 @@ struct Ghost {
     int speed_boosts;
 };
 
+// Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
 {
     for (int i = 0; i < ROWS; i++)
     {
         for (int j = 0; j < COLS; j++)
         {
-            sf::RectangleShape cell(sf::Vector2f(CELL_SIZE, CELL_SIZE));
-            cell.setOutlineColor(sf::Color::White);
-            cell.setOutlineThickness(1);
-            cell.setPosition(j * CELL_SIZE, i * CELL_SIZE);
-            window.draw(cell);
+            // Draw pellets, power-ups, and walls
+            switch (gameMap[i][j])
+            {
+                case 1:
+                    // Draw small white circle for pellet
+                    sf::CircleShape pelletShape(5);
+                    pelletShape.setFillColor(sf::Color::White);
+                    pelletShape.setPosition(j * CELL_SIZE + CELL_SIZE / 2 - 5, i * CELL_SIZE + CELL_SIZE / 2 - 5);
+                    window.draw(pelletShape);
+                    break;
+                case 2:
+                    // Draw slightly bigger red circle for power-up
+                    sf::CircleShape powerUpShape(8);
+                    powerUpShape.setFillColor(sf::Color::Red);
+                    powerUpShape.setPosition(j * CELL_SIZE + CELL_SIZE / 2 - 8, i * CELL_SIZE + CELL_SIZE / 2 - 8);
+                    window.draw(powerUpShape);
+                    break;
+                case 0:
+                    // Draw blue rectangle for wall
+                    sf::RectangleShape wallShape(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+                    wallShape.setFillColor(sf::Color::Blue);
+                    wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
+                    window.draw(wallShape);
+                    break;
+            }
         }
     }
 }
 
-// Define a struct to hold user input events
-struct InputEvent {
-    sf::Keyboard::Key key;
-    bool pressed;
-};
-
-// Queue for input events
-queue<InputEvent> inputQueue;
+// Function to initialize the game board with values
+void initializeGameBoard()
+{
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLS; j++)
+        {
+            if ((i == 1 && j == 1) || (i == ROWS - 2 && j == COLS - 2)) {
+                // Fixed walls
+                gameMap[i][j] = WALL;
+            } else {
+                // Randomly place pellets and power-ups
+                int randNum = rand() % 10; // Generate random number from 0 to 9
+                if (randNum == 0) {
+                    gameMap[i][j] = POWER_PELLET + rand() % 3; // Randomly assign power-up value (2, 3, or 4)
+                } else if (randNum < 4) {
+                    gameMap[i][j] = PELLET;
+                } else {
+                    gameMap[i][j] = EMPTY;
+                }
+            }
+        }
+    }
+}
 
 // Mutex to protect inputQueue
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -76,6 +113,7 @@ void* userInput(void* arg) {
         if (event->type == sf::Event::Closed)
         {
             // Exit thread if window is closed
+            pthread_mutex_unlock(&inputMutex);
             pthread_exit(NULL);
         }
         if (event->type == sf::Event::KeyPressed || event->type == sf::Event::KeyReleased) 
@@ -95,6 +133,7 @@ void* userInput(void* arg) {
                     pacman_shape->move(10, 0);
                     break;
             }
+            event->key.code = sf::Keyboard::Unknown;
         }
         pthread_mutex_unlock(&inputMutex);
         sleep(sf::milliseconds(100));
@@ -105,9 +144,10 @@ void* userInput(void* arg) {
 int main() {
     // Initialize random seed
     srand(time(nullptr));
-
+    // Initialize game board
+    initializeGameBoard();
     // Create SFML window
-    sf::CircleShape pacman_shape(50);
+    sf::CircleShape pacman_shape(30);
     pacman_shape.setFillColor(sf::Color::Yellow);
     pacman_shape.setPosition(100, 100);
 
@@ -120,7 +160,9 @@ int main() {
     pthread_create(&userInputThread, nullptr, userInput, args);
 
     // Create SFML window
-    sf::RenderWindow window(sf::VideoMode(800, 600), "SFML window");
+    sf::RenderWindow window(sf::VideoMode(1000, 800), "SFML window");
+
+    // Initialize game grid
 
     // Main loop
     while (window.isOpen()) {
@@ -133,6 +175,7 @@ int main() {
         pthread_mutex_unlock(&inputMutex);
 
         // Clear, draw, and display
+        drawGrid(window);
         window.clear();
         window.draw(pacman_shape);
         window.display();
@@ -140,6 +183,5 @@ int main() {
 
     // Join thread
     pthread_join(userInputThread, nullptr);
-
     return 0;
 }
