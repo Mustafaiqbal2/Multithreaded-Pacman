@@ -90,14 +90,15 @@ void initializeGameBoard()
 void* userInput(void* arg) 
 {
     // Unpack arguments
-    sf::Event* event = (sf::Event*) arg;
+    void** args = (void**) arg;
+    Event* event = (Event*) args[0];
+    sf::CircleShape* pacman_shape = (sf::CircleShape*) args[1];
     Keyboard::Key currentKey;
     while (1) 
     {
+        pacman_shape->move(pacman_x * CELL_SIZE, pacman_y * CELL_SIZE);
         if (event->type == Event::Closed)
         {
-            // Signal the semaphore to wake up the main event loop
-            //kill main thread
             sem_post(&eventSemaphore);
             break;
         }
@@ -107,8 +108,8 @@ void* userInput(void* arg)
             currentKey = event->key.code;
             if (currentKey != Keyboard::Unknown) 
             {
-                sem_wait(&pacmanSemaphore);
-                switch (currentKey) {
+                switch (currentKey) 
+                {
                     case Keyboard::Up:
                         pacman_y = -1;
                         pacman_x = 0;
@@ -128,10 +129,9 @@ void* userInput(void* arg)
                     default:
                         break;
                 }
-                sem_post(&pacmanSemaphore);
             }
         }
-        sf::sleep(sf::milliseconds(11));
+        sf::sleep(sf::milliseconds(200));
     }
     pthread_exit(NULL);
 }
@@ -140,10 +140,7 @@ void *movePacman(void *arg)
     sf::CircleShape* pacman_shape = (sf::CircleShape*) arg;
     while(1)
     {
-        sem_wait(&pacmanSemaphore);
-        pacman_shape->move(pacman_x * CELL_SIZE, pacman_y * CELL_SIZE);
-        sem_post(&pacmanSemaphore);
-        sf::sleep(sf::milliseconds(500));
+        
     }
     pthread_exit(NULL);
 }
@@ -167,16 +164,23 @@ int main()
 
     // Create thread for user input
     pthread_t userInputThread;
-    pthread_t pacmanThread;
     Event event;
-    pthread_create(&userInputThread, nullptr, userInput, &event);
-    pthread_create(&pacmanThread, nullptr, movePacman, &pacman_shape);
+    void* arg[2];
+    arg[0] = &event;
+    arg[1] = &pacman_shape;
+    pthread_create(&userInputThread, nullptr, userInput, arg);
 
     // Main loop
     while (window.isOpen()) {
         // Wait for the semaphore to be signaled
+        sem_wait(&eventSemaphore);
         window.pollEvent(event);
-        sf::sleep(sf::milliseconds(11));
+        // Check if the window is closed
+        if (event.type == Event::Closed) {
+            window.close();
+        }
+        sem_post(&eventSemaphore);
+        sf::sleep(sf::milliseconds(200));
 
         
         // Clear, draw, and display
