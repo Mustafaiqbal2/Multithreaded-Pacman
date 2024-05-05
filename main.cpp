@@ -5,7 +5,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
 #include <SFML/Window.hpp>
-#include <semaphore.h>
+#include <unistd.h>
 
 // Define game board size
 #define ROWS 25
@@ -15,17 +15,19 @@
 using namespace std;
 using namespace sf;
 
-//pacman coordinates
-int pacman_x = 0;
-int pacman_y = 0;
-
 // Define game entities
 // Define game grid
 int gameMap[ROWS][COLS] = {0};
 
-// Semaphore for event synchronization
-sem_t eventSemaphore;
-sem_t pacmanSemaphore;
+// Mutex to protect user input
+pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Shared variable for user input
+Keyboard::Key userInputKey = Keyboard::Unknown;
+
+//pacman coordinates
+int pacman_x = 25/8;
+int pacman_y = 25/4;
 
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -87,65 +89,71 @@ void initializeGameBoard()
 }
 
 // Function to handle user input
-void* userInput(void* arg) 
-{
+void* userInput(void* arg) {
     // Unpack arguments
-    void** args = (void**) arg;
-    Event* event = (Event*) args[0];
-    sf::CircleShape* pacman_shape = (sf::CircleShape*) args[1];
-    Keyboard::Key currentKey;
-    while (1) 
+    sf::RenderWindow* window = (sf::RenderWindow*) arg;
+    while (window->isOpen()) 
     {
-        pacman_shape->move(pacman_x * CELL_SIZE, pacman_y * CELL_SIZE);
-        if (event->type == Event::Closed)
+        Event event;
+        // Process SFML events
+        while (window->pollEvent(event)) 
         {
-            sem_post(&eventSemaphore);
-            break;
-        }
-        else if (event->type == Event::KeyPressed) 
-        {
-        
-            currentKey = event->key.code;
-            if (currentKey != Keyboard::Unknown) 
+            if (event.type == Event::Closed)
             {
-                switch (currentKey) 
-                {
-                    case Keyboard::Up:
-                        pacman_y = -1;
-                        pacman_x = 0;
-                        break;
-                    case Keyboard::Down:
-                        pacman_y = 1;
-                        pacman_x = 0;
-                        break;
-                    case Keyboard::Left:
-                        pacman_x = -1;
-                        pacman_y = 0;
-                        break;
-                    case Keyboard::Right:
-                        pacman_x = 1;
-                        pacman_y = 0;
-                        break;
-                    default:
-                        break;
-                }
+                window->close();
+            }
+            else if (event.type == Event::KeyPressed) {
+                // Lock mutex before accessing shared variable
+                pthread_mutex_lock(&inputMutex);
+                userInputKey = event.key.code;
+                // Unlock mutex after updating shared variable
+                pthread_mutex_unlock(&inputMutex);
             }
         }
-        sf::sleep(sf::milliseconds(200));
     }
     pthread_exit(NULL);
 }
-void *movePacman(void *arg)
+
+// Function to handle movement
+void movePacman()
 {
-    sf::CircleShape* pacman_shape = (sf::CircleShape*) arg;
-    while(1)
+    // Initial movement direction
+    int pacman_direction_x = 0;
+    int pacman_direction_y = 0;
+    while (true) 
     {
-        
+        pthread_mutex_lock(&inputMutex);
+        // Update movement based on current key
+        switch (userInputKey) {
+            case Keyboard::Up:
+                pacman_direction_x = 0;
+                pacman_direction_y = -1;
+                break;
+            case Keyboard::Down:
+                pacman_direction_x = 0;
+                pacman_direction_y = 1;
+                break;
+            case Keyboard::Left:
+                pacman_direction_x = -1;
+                pacman_direction_y = 0;
+                break;
+            case Keyboard::Right:
+                pacman_direction_x = 1;
+                pacman_direction_y = 0;
+                break;
+            default:
+                break;
+        }
+        pthread_mutex_unlock(&inputMutex);
+        // Move pacman
+        cout << "move" << endl; 
+        pacman_x += pacman_direction_x*CELL_SIZE;
+        pacman_y += pacman_direction_y*CELL_SIZE;
+        usleep(300000); 
     }
-    pthread_exit(NULL);
 }
-int main() 
-{
+
+int main() {
     // Initialize random seed
     srand(time(nullptr));
     // Initialize game board
@@ -156,45 +164,30 @@ int main()
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25/2);
     pacman_shape.setFillColor(sf::Color::Yellow);
-    pacman_shape.setPosition(0 + 25/8, 25/4 ); // Set initial position of the player
-
-    // Initialize the event semaphore
-    sem_init(&eventSemaphore, 1, 1);
-    sem_init(&pacmanSemaphore, 1, 1);
+    pacman_shape.setPosition(25/8, 25/4); // Set initial position
 
     // Create thread for user input
     pthread_t userInputThread;
-    Event event;
-    void* arg[2];
-    arg[0] = &event;
-    arg[1] = &pacman_shape;
-    pthread_create(&userInputThread, nullptr, userInput, arg);
+    pthread_create(&userInputThread, nullptr, userInput, &window);
+
+    // Create thread for movement
+    pthread_t moveThread;
+    pthread_create(&moveThread, nullptr, (void* (*)(void*))movePacman, nullptr);
 
     // Main loop
-    while (window.isOpen()) {
-        // Wait for the semaphore to be signaled
-        sem_wait(&eventSemaphore);
-        window.pollEvent(event);
-        // Check if the window is closed
-        if (event.type == Event::Closed) {
-            window.close();
-        }
-        sem_post(&eventSemaphore);
-        sf::sleep(sf::milliseconds(200));
-
-        
+    while (window.isOpen()) 
+    {
         // Clear, draw, and display
         window.clear();
         drawGrid(window);
+        pacman_shape.setPosition(pacman_x, pacman_y); // Update pacman position
         window.draw(pacman_shape); // Draw the player (yellow circle)
         window.display();
     }
 
-    // Join thread
+    // Join threads
     pthread_join(userInputThread, nullptr);
-    // Destroy the event semaphore
-    sem_destroy(&eventSemaphore);
-    sem_destroy(&pacmanSemaphore);
+    pthread_join(moveThread, nullptr);
 
     return 0;
 }
