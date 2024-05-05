@@ -15,18 +15,17 @@
 using namespace std;
 using namespace sf;
 
+//pacman coordinates
+int pacman_x = 0;
+int pacman_y = 0;
+
 // Define game entities
 // Define game grid
 int gameMap[ROWS][COLS] = {0};
 
 // Semaphore for event synchronization
 sem_t eventSemaphore;
-
-// Mutex to protect user input
-pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
-
-// Shared variable for user input
-Keyboard::Key userInputKey = Keyboard::Unknown;
+sem_t pacmanSemaphore;
 
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -88,32 +87,68 @@ void initializeGameBoard()
 }
 
 // Function to handle user input
-void* userInput(void* arg) {
+void* userInput(void* arg) 
+{
     // Unpack arguments
-    sf::RenderWindow* window = (sf::RenderWindow*) arg;
-
-    while (window->isOpen()) {
-        Event event;
-        // Process SFML events
-        while (window->pollEvent(event)) {
-            if (event.type == Event::Closed)
-                window->close();
-            else if (event.type == Event::KeyPressed) {
-                // Lock mutex before accessing shared variable
-                pthread_mutex_lock(&inputMutex);
-                userInputKey = event.key.code;
-                // Unlock mutex after updating shared variable
-                pthread_mutex_unlock(&inputMutex);
-                // Signal the semaphore to wake up the main event loop
-                sem_post(&eventSemaphore);
+    sf::Event* event = (sf::Event*) arg;
+    Keyboard::Key currentKey;
+    while (1) 
+    {
+        if (event->type == Event::Closed)
+        {
+            // Signal the semaphore to wake up the main event loop
+            //kill main thread
+            sem_post(&eventSemaphore);
+            break;
+        }
+        else if (event->type == Event::KeyPressed) 
+        {
+        
+            currentKey = event->key.code;
+            if (currentKey != Keyboard::Unknown) 
+            {
+                sem_wait(&pacmanSemaphore);
+                switch (currentKey) {
+                    case Keyboard::Up:
+                        pacman_y = -1;
+                        pacman_x = 0;
+                        break;
+                    case Keyboard::Down:
+                        pacman_y = 1;
+                        pacman_x = 0;
+                        break;
+                    case Keyboard::Left:
+                        pacman_x = -1;
+                        pacman_y = 0;
+                        break;
+                    case Keyboard::Right:
+                        pacman_x = 1;
+                        pacman_y = 0;
+                        break;
+                    default:
+                        break;
+                }
+                sem_post(&pacmanSemaphore);
             }
         }
+        sf::sleep(sf::milliseconds(11));
     }
-
     pthread_exit(NULL);
 }
-
-int main() {
+void *movePacman(void *arg)
+{
+    sf::CircleShape* pacman_shape = (sf::CircleShape*) arg;
+    while(1)
+    {
+        sem_wait(&pacmanSemaphore);
+        pacman_shape->move(pacman_x * CELL_SIZE, pacman_y * CELL_SIZE);
+        sem_post(&pacmanSemaphore);
+        sf::sleep(sf::milliseconds(500));
+    }
+    pthread_exit(NULL);
+}
+int main() 
+{
     // Initialize random seed
     srand(time(nullptr));
     // Initialize game board
@@ -121,52 +156,29 @@ int main() {
 
     // Create SFML window
     sf::RenderWindow window(sf::VideoMode(800, 800), "SFML window");
+    // Create the yellow circle (player)
+    sf::CircleShape pacman_shape(25/2);
+    pacman_shape.setFillColor(sf::Color::Yellow);
+    pacman_shape.setPosition(0 + 25/8, 25/4 ); // Set initial position of the player
 
     // Initialize the event semaphore
-    sem_init(&eventSemaphore, 0, 0);
+    sem_init(&eventSemaphore, 1, 1);
+    sem_init(&pacmanSemaphore, 1, 1);
 
     // Create thread for user input
     pthread_t userInputThread;
-    pthread_create(&userInputThread, nullptr, userInput, &window);
-
-    // Create the yellow circle (player)
-    sf::CircleShape pacman_shape(25);
-    pacman_shape.setFillColor(sf::Color::Yellow);
-    pacman_shape.setPosition(400, 400); // Set initial position
+    pthread_t pacmanThread;
+    Event event;
+    pthread_create(&userInputThread, nullptr, userInput, &event);
+    pthread_create(&pacmanThread, nullptr, movePacman, &pacman_shape);
 
     // Main loop
     while (window.isOpen()) {
         // Wait for the semaphore to be signaled
-        sem_wait(&eventSemaphore);
+        window.pollEvent(event);
+        sf::sleep(sf::milliseconds(11));
 
-        // Lock mutex before accessing shared variable
-        pthread_mutex_lock(&inputMutex);
-        Keyboard::Key currentKey = userInputKey;
-        userInputKey = Keyboard::Unknown; // Reset input key
-        // Unlock mutex after accessing shared variable
-        pthread_mutex_unlock(&inputMutex);
-
-        // Process user input
-        if (currentKey != Keyboard::Unknown) {
-            // Move the circle based on user input
-            switch (currentKey) {
-                case Keyboard::Up:
-                    pacman_shape.move(0, -CELL_SIZE);
-                    break;
-                case Keyboard::Down:
-                    pacman_shape.move(0, CELL_SIZE);
-                    break;
-                case Keyboard::Left:
-                    pacman_shape.move(-CELL_SIZE, 0);
-                    break;
-                case Keyboard::Right:
-                    pacman_shape.move(CELL_SIZE, 0);
-                    break;
-                default:
-                    break;
-            }
-        }
-
+        
         // Clear, draw, and display
         window.clear();
         drawGrid(window);
@@ -178,6 +190,7 @@ int main() {
     pthread_join(userInputThread, nullptr);
     // Destroy the event semaphore
     sem_destroy(&eventSemaphore);
+    sem_destroy(&pacmanSemaphore);
 
     return 0;
 }
