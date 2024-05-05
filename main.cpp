@@ -26,8 +26,8 @@ pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
 Keyboard::Key userInputKey = Keyboard::Unknown;
 
 //pacman coordinates
-int pacman_x = 100;
-int pacman_y = 50;
+int pacman_x = CELL_SIZE + 25/8;
+int pacman_y = CELL_SIZE + 25/4;
 
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -60,6 +60,18 @@ void drawGrid(sf::RenderWindow& window)
                     wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
                     window.draw(wallShape);
                     break;
+                case -1:
+                    // Draw blue rectangle for wall
+                    wallShape.setFillColor(sf::Color::Yellow);
+                    wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
+                    window.draw(wallShape);
+                    break;
+                case -2:
+                    // Draw blue rectangle for wall
+                    wallShape.setFillColor(sf::Color(100, 10, 255));
+                    wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
+                    window.draw(wallShape);
+                    break;
             }
         }
     }
@@ -74,8 +86,83 @@ void initializeGameBoard()
         {
             if ((i == 0 || j == 0) || (i == ROWS - 1 || j == COLS - 1)) {
                 // Fixed walls
+                gameMap[i][j] = -2;
+            }
+            // GHOST HOUSE
+            else if((i==10 && j>=10)&&(i==10 && j<=14)){
+                if(i!=10 || j!=12)
+                gameMap[i][j] = -1;
+            }
+            else if((i==14 && j>=10)&&(i==14 && j<=14)){
+                gameMap[i][j] = -1;
+            }
+            else if((j==10 && i>=10)&&(j==10 && i<=14)){
+                gameMap[i][j] = -1;
+            }
+            else if((j==14 && i>=10)&&(j==14 && i<=14)){
+                gameMap[i][j] = -1;
+            }
+            //openings
+            else if(i==12 || j==12)
+            {
+                gameMap[i][j] = 0;
+                
+            }
+            // small square
+            else if((i==6 && j>=6)&&(i==6 && j<=18)){
                 gameMap[i][j] = 1;
-            } else {
+            }
+            else if((i==18 && j>=6)&&(i==18 && j<=18)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==6 && i>=6)&&(j==6 && i<=18)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==18 && i>=6)&&(j==18 && i<=18)){
+                gameMap[i][j] = 1;
+            }
+            ///////////////small square
+            else if((i==8 && j>=8)&&(i==8 && j<=16)){
+                gameMap[i][j] = 1;
+            }
+            else if((i==16 && j>=8)&&(i==16 && j<=16)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==8 && i>=8)&&(j==8 && i<=16)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==16 && i>=8)&&(j==16 && i<=16)){
+                gameMap[i][j] = 1;
+            }
+            ///////////////////////////Big Swuare///////////////////////////
+            else if((i==4 && j>=4)&&(i==4 && j<=20)){
+                gameMap[i][j] = 1;
+            }
+            else if((i==20 && j>=4)&&(i==20 && j<=20)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==4 && i>=4)&&(j==4 && i<=20)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==20 && i>=4)&&(j==20 && i<=20)){
+                gameMap[i][j] = 1;
+            }
+            ///////////////////// bigger square
+            else if((i==2 && j>=2)&&(i==2 && j<=22)){
+                gameMap[i][j] = 1;
+            }
+            else if((i==22 && j>=2)&&(i==22 && j<=22)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==2 && i>=2)&&(j==2 && i<=22)){
+                gameMap[i][j] = 1;
+            }
+            else if((j==22 && i>=2)&&(j==22 && i<=22)){
+                gameMap[i][j] = 1;
+            }
+
+            else 
+            {
                 // Randomly place pellets and power-ups
                 int randNum = rand() % 5; // Generate random number from 0 to 4
                 if (randNum == 2) {
@@ -149,14 +236,14 @@ void movePacman()
         int nextX = pacman_x + pacman_direction_x * CELL_SIZE;
         int nextY = pacman_y + pacman_direction_y * CELL_SIZE;
         // Check if the next position is a wall
-        if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 1) {
+        if (abs(gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE]) == 1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -2) {
             cout << "Wall detected!" << endl;
         } else {
             // Move pacman
             pacman_x += pacman_direction_x * CELL_SIZE;
             pacman_y += pacman_direction_y * CELL_SIZE;
         }
-        usleep(300000); // Sleep for 0.3 seconds
+        usleep(150000); // Sleep for 0.3 seconds
     }
 }
 
@@ -171,7 +258,7 @@ int main() {
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25/2);
     pacman_shape.setFillColor(sf::Color::Yellow);
-    pacman_shape.setPosition(100, 50); // Set initial position to (100, 50)
+    pacman_shape.setPosition(25/8, 25/4); // Set initial position to (100, 50)
 
     // Create thread for user input
     pthread_t userInputThread;
