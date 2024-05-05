@@ -21,6 +21,8 @@ int gameMap[ROWS][COLS] = {0};
 
 // Mutex to protect user input
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
+// Mutex to protect pacman position
+pthread_mutex_t pacmanMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Shared variable for user input
 Keyboard::Key userInputKey = Keyboard::Unknown;
@@ -61,13 +63,13 @@ void drawGrid(sf::RenderWindow& window)
                     window.draw(wallShape);
                     break;
                 case -1:
-                    // Draw blue rectangle for wall
+                    // Draw blue rectangle for ghost house
                     wallShape.setFillColor(sf::Color::Yellow);
                     wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
                     window.draw(wallShape);
                     break;
                 case -2:
-                    // Draw blue rectangle for wall
+                    // Draw blue rectangle for fixed wall
                     wallShape.setFillColor(sf::Color(100, 10, 255));
                     wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
                     window.draw(wallShape);
@@ -88,7 +90,7 @@ void initializeGameBoard()
                 // Fixed walls
                 gameMap[i][j] = -2;
             }
-            // GHOST HOUSE
+            // Ghost house
             else if((i==10 && j>=10)&&(i==10 && j<=14)){
                 if(i!=10 || j!=12)
                 gameMap[i][j] = -1;
@@ -102,13 +104,13 @@ void initializeGameBoard()
             else if((j==14 && i>=10)&&(j==14 && i<=14)){
                 gameMap[i][j] = -1;
             }
-            //openings
+            // Openings
             else if(i==12 || j==12)
             {
                 gameMap[i][j] = 0;
                 
             }
-            // small square
+            // Small square
             else if((i==6 && j>=6)&&(i==6 && j<=18)){
                 gameMap[i][j] = 1;
             }
@@ -121,20 +123,7 @@ void initializeGameBoard()
             else if((j==18 && i>=6)&&(j==18 && i<=18)){
                 gameMap[i][j] = 1;
             }
-            ///////////////small square
-            else if((i==8 && j>=8)&&(i==8 && j<=16)){
-                gameMap[i][j] = 1;
-            }
-            else if((i==16 && j>=8)&&(i==16 && j<=16)){
-                gameMap[i][j] = 1;
-            }
-            else if((j==8 && i>=8)&&(j==8 && i<=16)){
-                gameMap[i][j] = 1;
-            }
-            else if((j==16 && i>=8)&&(j==16 && i<=16)){
-                gameMap[i][j] = 1;
-            }
-            ///////////////////////////Big Swuare///////////////////////////
+            // Bigger square
             else if((i==4 && j>=4)&&(i==4 && j<=20)){
                 gameMap[i][j] = 1;
             }
@@ -147,7 +136,7 @@ void initializeGameBoard()
             else if((j==20 && i>=4)&&(j==20 && i<=20)){
                 gameMap[i][j] = 1;
             }
-            ///////////////////// bigger square
+            // Bigger square
             else if((i==2 && j>=2)&&(i==2 && j<=22)){
                 gameMap[i][j] = 1;
             }
@@ -160,7 +149,6 @@ void initializeGameBoard()
             else if((j==22 && i>=2)&&(j==22 && i<=22)){
                 gameMap[i][j] = 1;
             }
-
             else 
             {
                 // Randomly place pellets and power-ups
@@ -213,35 +201,52 @@ void movePacman()
         // Update movement based on current key
         switch (userInputKey) {
             case Keyboard::Up:
+                // Lock mutex before accessing pacman_x and pacman_y
+                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = 0;
                 pacman_direction_y = -1;
+                pthread_mutex_unlock(&pacmanMutex);
                 break;
             case Keyboard::Down:
+                // Lock mutex before accessing pacman_x and pacman_y
+                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = 0;
                 pacman_direction_y = 1;
+                pthread_mutex_unlock(&pacmanMutex);
                 break;
             case Keyboard::Left:
+                // Lock mutex before accessing pacman_x and pacman_y
+                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = -1;
                 pacman_direction_y = 0;
+                pthread_mutex_unlock(&pacmanMutex);
                 break;
             case Keyboard::Right:
+                // Lock mutex before accessing pacman_x and pacman_y
+                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = 1;
                 pacman_direction_y = 0;
+                pthread_mutex_unlock(&pacmanMutex);
                 break;
             default:
                 break;
         }
         pthread_mutex_unlock(&inputMutex);
         // Calculate the next position
-        int nextX = pacman_x + pacman_direction_x * CELL_SIZE;
-        int nextY = pacman_y + pacman_direction_y * CELL_SIZE;
+        int nextX, nextY;
+        pthread_mutex_lock(&pacmanMutex);
+        nextX = pacman_x + pacman_direction_x * CELL_SIZE;
+        nextY = pacman_y + pacman_direction_y * CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
         // Check if the next position is a wall
         if (abs(gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE]) == 1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -2) {
             cout << "Wall detected!" << endl;
         } else {
             // Move pacman
+            pthread_mutex_lock(&pacmanMutex);
             pacman_x += pacman_direction_x * CELL_SIZE;
             pacman_y += pacman_direction_y * CELL_SIZE;
+            pthread_mutex_unlock(&pacmanMutex);
         }
         usleep(150000); // Sleep for 0.3 seconds
     }
@@ -282,6 +287,9 @@ int main() {
     // Join threads
     pthread_join(userInputThread, nullptr);
     pthread_join(moveThread, nullptr);
+    // Destroy mutexes
+    pthread_mutex_destroy(&inputMutex);
+    pthread_mutex_destroy(&pacmanMutex);
 
     return 0;
 }
