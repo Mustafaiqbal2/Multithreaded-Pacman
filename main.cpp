@@ -26,8 +26,8 @@ pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
 Keyboard::Key userInputKey = Keyboard::Unknown;
 
 //pacman coordinates
-int pacman_x = 25/8;
-int pacman_y = 25/4;
+int pacman_x = 100;
+int pacman_y = 50;
 
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -145,11 +145,18 @@ void movePacman()
                 break;
         }
         pthread_mutex_unlock(&inputMutex);
-        // Move pacman
-        cout << "move" << endl; 
-        pacman_x += pacman_direction_x*CELL_SIZE;
-        pacman_y += pacman_direction_y*CELL_SIZE;
-        usleep(300000); 
+        // Calculate the next position
+        int nextX = pacman_x + pacman_direction_x * CELL_SIZE;
+        int nextY = pacman_y + pacman_direction_y * CELL_SIZE;
+        // Check if the next position is a wall
+        if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 1) {
+            cout << "Wall detected!" << endl;
+        } else {
+            // Move pacman
+            pacman_x += pacman_direction_x * CELL_SIZE;
+            pacman_y += pacman_direction_y * CELL_SIZE;
+        }
+        usleep(300000); // Sleep for 0.3 seconds
     }
 }
 
@@ -164,7 +171,7 @@ int main() {
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25/2);
     pacman_shape.setFillColor(sf::Color::Yellow);
-    pacman_shape.setPosition(25/8, 25/4); // Set initial position
+    pacman_shape.setPosition(100, 50); // Set initial position to (100, 50)
 
     // Create thread for user input
     pthread_t userInputThread;
