@@ -287,26 +287,80 @@ int main()
 {
     // Initialize random seed
     srand(time(nullptr));
+
+    // Create SFML window for menu
+    sf::RenderWindow menuWindow(sf::VideoMode(800, 800), "Menu");
+
+    // Load menu background texture from a PNG file
+    sf::Texture menuTexture;
+    if (!menuTexture.loadFromFile("menu.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load menu background texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+
+    // Create menu background sprite
+    sf::Sprite menuBackground(menuTexture);
+
+    // Load font for menu text
+    sf::Font menuFont;
+    menuFont.loadFromFile("arial.ttf"); // Change the file path as needed
+
+    // Create menu text
+    sf::Text menuText;
+    menuText.setFont(menuFont);
+    menuText.setCharacterSize(32);
+    menuText.setFillColor(sf::Color::White);
+    menuText.setString("Press Enter to Start");
+    menuText.setPosition(280, 300);
+
+    // Menu loop
+    while (menuWindow.isOpen())
+    {
+        sf::Event event;
+        while (menuWindow.pollEvent(event))
+        {
+            if (event.type == sf::Event::Closed)
+                menuWindow.close();
+            else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Enter)
+                menuWindow.close();
+        }
+
+        menuWindow.clear();
+
+        // Draw menu background first
+        menuWindow.draw(menuBackground);
+
+        // Draw menu text on top of the background
+        menuWindow.draw(menuText);
+
+        menuWindow.display();
+    }
+
+    // Close menu and start game
+    menuWindow.close();
+
     // Initialize game board
     initializeGameBoard();
 
-    // Create SFML window
+    // Create SFML window for the game
     sf::RenderWindow window(sf::VideoMode(800, 800), "SFML window");
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25 / 2);
     pacman_shape.setFillColor(sf::Color::Yellow);
     pacman_shape.setPosition(25 / 8, 25 / 4); // Set initial position to (100, 50)
 
-    // Load font file
+    // Load font file for score display
     sf::Font font;
-    font.loadFromFile("arial.ttf");
+    font.loadFromFile("arial.ttf"); // Change the file path as needed
 
-    // Create score text object
+    // Create score text
     sf::Text scoreText;
     scoreText.setFont(font);
-    scoreText.setCharacterSize(24); // Set the character size
-    scoreText.setFillColor(sf::Color::White); // Set the text color
-    scoreText.setPosition(10, 10); // Set the position of the text
+    scoreText.setCharacterSize(24);
+    scoreText.setFillColor(sf::Color::White);
+    scoreText.setPosition(10, 10);
 
     // Create thread for user input
     pthread_t userInputThread;
@@ -323,11 +377,11 @@ int main()
         window.clear();
         drawGrid(window);
         pacman_shape.setPosition(pacman_x, pacman_y); // Update pacman position
-        window.draw(pacman_shape); // Draw the player (yellow circle)
+        window.draw(pacman_shape);                     // Draw the player (yellow circle)
 
-        // Update and draw the score text
-        scoreText.setString("Score: " + std::to_string(score)); // Convert score to string and set it
-        window.draw(scoreText); // Draw the score text
+        // Update and display score
+        scoreText.setString("Score: " + std::to_string(score));
+        window.draw(scoreText);
 
         window.display();
     }
