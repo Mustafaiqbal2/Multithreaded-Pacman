@@ -204,31 +204,23 @@ void movePacman()
         switch (userInputKey) {
             case Keyboard::Up:
                 // Lock mutex before accessing pacman_x and pacman_y
-                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = 0;
                 pacman_direction_y = -1;
-                pthread_mutex_unlock(&pacmanMutex);
                 break;
             case Keyboard::Down:
                 // Lock mutex before accessing pacman_x and pacman_y
-                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = 0;
                 pacman_direction_y = 1;
-                pthread_mutex_unlock(&pacmanMutex);
                 break;
             case Keyboard::Left:
                 // Lock mutex before accessing pacman_x and pacman_y
-                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = -1;
                 pacman_direction_y = 0;
-                pthread_mutex_unlock(&pacmanMutex);
                 break;
             case Keyboard::Right:
                 // Lock mutex before accessing pacman_x and pacman_y
-                pthread_mutex_lock(&pacmanMutex);
                 pacman_direction_x = 1;
                 pacman_direction_y = 0;
-                pthread_mutex_unlock(&pacmanMutex);
                 break;
             default:
                 break;
@@ -261,7 +253,7 @@ int main() {
     initializeGameBoard();
 
     // Create SFML window
-    sf::RenderWindow window(sf::VideoMode(800, 800), "SFML window");
+    sf::RenderWindow window(sf::VideoMode(800, 900), "SFML window");
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25/2);
     pacman_shape.setFillColor(sf::Color::Yellow);
