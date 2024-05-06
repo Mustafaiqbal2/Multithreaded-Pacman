@@ -174,8 +174,10 @@ void* userInput(void* arg) {
         while (window->pollEvent(event)) 
         {
             if (event.type == Event::Closed)
-            {
+            {   
+
                 window->close();
+                exit(1);
             }
             else if (event.type == Event::KeyPressed) {
                 // Lock mutex before accessing shared variable
