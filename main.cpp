@@ -18,6 +18,7 @@ using namespace sf;
 // Define game entities
 // Define game grid
 int gameMap[ROWS][COLS] = {0};
+int score = 0;
 
 // Mutex to protect user input
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -203,22 +204,18 @@ void movePacman()
         // Update movement based on current key
         switch (userInputKey) {
             case Keyboard::Up:
-                // Lock mutex before accessing pacman_x and pacman_y
                 pacman_direction_x = 0;
                 pacman_direction_y = -1;
                 break;
             case Keyboard::Down:
-                // Lock mutex before accessing pacman_x and pacman_y
                 pacman_direction_x = 0;
                 pacman_direction_y = 1;
                 break;
             case Keyboard::Left:
-                // Lock mutex before accessing pacman_x and pacman_y
                 pacman_direction_x = -1;
                 pacman_direction_y = 0;
                 break;
             case Keyboard::Right:
-                // Lock mutex before accessing pacman_x and pacman_y
                 pacman_direction_x = 1;
                 pacman_direction_y = 0;
                 break;
@@ -226,15 +223,28 @@ void movePacman()
                 break;
         }
         pthread_mutex_unlock(&inputMutex);
+
         // Calculate the next position
         int nextX, nextY;
         pthread_mutex_lock(&pacmanMutex);
         nextX = pacman_x + pacman_direction_x * CELL_SIZE;
         nextY = pacman_y + pacman_direction_y * CELL_SIZE;
         pthread_mutex_unlock(&pacmanMutex);
+
         // Check if the next position is a wall
         if (abs(gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE]) == 1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -2) {
             cout << "Wall detected!" << endl;
+        } else if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 2 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 3) {
+            // Handle scoring when encountering red (2) or white (3) balls
+            pthread_mutex_lock(&pacmanMutex);
+            int ballValue = gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE];
+            if (ballValue != 0) {  // Check if the ball hasn't been consumed already
+                score += ballValue;
+                cout << "Score: " << score << endl;
+                // Update the game grid to mark the ball as consumed
+                gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] = 0;
+            }
+            pthread_mutex_unlock(&pacmanMutex);
         } else {
             // Move pacman
             pthread_mutex_lock(&pacmanMutex);
@@ -246,6 +256,8 @@ void movePacman()
     }
 }
 
+
+
 int main() {
     // Initialize random seed
     srand(time(nullptr));
@@ -253,7 +265,7 @@ int main() {
     initializeGameBoard();
 
     // Create SFML window
-    sf::RenderWindow window(sf::VideoMode(800, 900), "SFML window");
+    sf::RenderWindow window(sf::VideoMode(800, 800), "SFML window");
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25/2);
     pacman_shape.setFillColor(sf::Color::Yellow);
