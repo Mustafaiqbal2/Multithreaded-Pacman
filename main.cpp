@@ -6,6 +6,9 @@
 #include <SFML/System.hpp>
 #include <SFML/Window.hpp>
 #include <unistd.h>
+#include <queue>
+#include <stack>
+#include <climits>
 
 // Define game board size
 #define ROWS 25
@@ -31,6 +34,9 @@ Keyboard::Key userInputKey = Keyboard::Unknown;
 //pacman coordinates
 int pacman_x = CELL_SIZE + 25 / 8;
 int pacman_y = CELL_SIZE + 25 / 4;
+//ghost coordinates
+int ghost1X = CELL_SIZE * 11;
+int ghost1Y = CELL_SIZE * 13;
 
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -241,7 +247,6 @@ void* userInput(void* arg)
     }
     pthread_exit(NULL);
 }
-
 // Function to handle movement
 void movePacman()
 {
@@ -310,6 +315,96 @@ void movePacman()
             pthread_mutex_unlock(&pacmanMutex);
         }
         usleep(180000); // Sleep for 0.3 seconds
+    }
+}
+bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
+    return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
+}
+int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS][COLS]) {
+    bool visited[ROWS][COLS] = {false};
+    std::queue<std::pair<int, int>> q;
+    q.push({startX, startY});
+    visited[startX][startY] = true;
+
+    int dx[] = {0, 0, 1, -1};
+    int dy[] = {1, -1, 0, 0};
+    int dist[ROWS][COLS] = {0}; // Store distances from start position
+
+    while (!q.empty()) {
+        int x = q.front().first;
+        int y = q.front().second;
+        q.pop();
+
+        // Check if destination is reached
+        if (x == destX && y == destY) {
+            return dist[x][y];
+        }
+
+        // Explore adjacent cells
+        for (int i = 0; i < 4; ++i) {
+            int newX = x + dx[i];
+            int newY = y + dy[i];
+
+            // Check validity and unvisited status
+            if (isValid(newX, newY, gameMap) && !visited[newX][newY]) {
+                q.push({newX, newY});
+                visited[newX][newY] = true;
+                dist[newX][newY] = dist[x][y] + 1; // Update distance
+            }
+        }
+    }
+
+    // If destination is unreachable
+    return INT_MAX;
+}
+std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY, int pacmanX, int pacmanY) {
+
+    int dx[] = {0, 0, 1, -1};
+    int dy[] = {1, -1, 0, 0};
+
+    std::pair<std::pair<int, int>, int> nextMove[4];
+
+    for (int i = 0; i < 4; i++) {
+        int x = ghostX + dx[i];
+        int y = ghostY + dy[i];
+        nextMove[i] = {{-1, -1}, INT_MAX};
+        if (isValid(x, y, gameMap)) {
+            nextMove[i].first = {x, y};
+            // call recursive function to find shortest path
+            bool visited[ROWS][COLS] = {false};
+            nextMove[i].second = shortestPath(x, y, pacmanX, pacmanY, gameMap);
+            cout<<"x"<<x<<" y"<<y<<" dist"<<nextMove[i].second<<endl;
+        }
+    }
+
+    // find minimum of the calculated distances
+    int minDist = INT_MAX;
+    int minIndex = -1;
+    for (int i = 0; i < 4; i++) {
+        if (nextMove[i].second < minDist) {
+            minDist = nextMove[i].second;
+            minIndex = i;
+        }
+    }
+
+    return nextMove[minIndex].first;
+}
+// Function for ghost movement
+void moveGhost(void* arg) {
+    sf::CircleShape* ghost_shape = (sf::CircleShape*)arg;
+    while(1)
+    {
+        pthread_mutex_lock(&pacmanMutex);
+        int pacX = pacman_x / CELL_SIZE;
+        int pacY = pacman_y / CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
+        cout <<"x"<<ghost1X / CELL_SIZE << " y" << ghost1Y / CELL_SIZE << endl;
+        std::pair<int, int> nextMove = findNextMove(gameMap, ghost1X / CELL_SIZE, ghost1Y / CELL_SIZE, pacX, pacY);
+        ghost1X = nextMove.first * CELL_SIZE;
+        ghost1Y = nextMove.second* CELL_SIZE;
+        cout << "ghost x" << ghost1X /CELL_SIZE<< " ghost y" << ghost1Y/CELL_SIZE << endl;
+        ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
+        usleep(200000); // Sleep for 0.3 seconds
     }
 }
 
@@ -388,7 +483,11 @@ int main()
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25 / 2);
     pacman_shape.setFillColor(sf::Color::Yellow);
-    pacman_shape.setPosition(25 / 8, 25 / 4); // Set initial position to (100, 50)
+    pacman_shape.setPosition(25 / 8, 25 / 4); 
+    // WHite circle for ghost test
+    sf::CircleShape ghost_shape(25 / 2);
+    ghost_shape.setFillColor(sf::Color::White);
+    ghost_shape.setPosition(CELL_SIZE * 11, CELL_SIZE * 13); 
 
     // Load font file for score display
     sf::Font font;
@@ -409,6 +508,10 @@ int main()
     pthread_t moveThread;
     pthread_create(&moveThread, nullptr, (void* (*)(void*))movePacman, nullptr);
 
+    //Create thread for ghost 1 movement
+    pthread_t ghostThread;
+    pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost, &ghost_shape);
+
     // Main loop
     while (window.isOpen())
     {
@@ -421,6 +524,7 @@ int main()
         // Update and display score
         scoreText.setString("Score: " + std::to_string(score));
         window.draw(scoreText);
+        window.draw(ghost_shape); // Draw the ghost (white circle)
 
         window.display();
     }
