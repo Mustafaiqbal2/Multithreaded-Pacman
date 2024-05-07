@@ -54,7 +54,13 @@ void drawGrid(sf::RenderWindow& window)
             case 3:
                 // Draw slightly bigger red circle for power-up
                 powerUpShape.setFillColor(sf::Color::Red);
-                powerUpShape.setPosition(j * CELL_SIZE + CELL_SIZE / 2 - 8, i * CELL_SIZE + CELL_SIZE / 2 - 8);
+                powerUpShape.setPosition(j * CELL_SIZE + CELL_SIZE / 2 - 5, i * CELL_SIZE + CELL_SIZE / 2 - 5);
+                window.draw(powerUpShape);
+                break;
+            case 4:
+                // Draw slightly bigger white circle for power-up
+                powerUpShape.setFillColor(sf::Color::Blue);
+                powerUpShape.setPosition(j * CELL_SIZE + CELL_SIZE / 2 - 5, i * CELL_SIZE + CELL_SIZE / 2 - 5);
                 window.draw(powerUpShape);
                 break;
             case 1:
@@ -87,6 +93,13 @@ void initializeGameBoard()
     {
         for (int j = 0; j < COLS; j++)
         {
+            gameMap[i][j] = 2;
+        }
+    }
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLS; j++)
+        {
             if ((i == 0 || j == 0) || (i == ROWS - 1 || j == COLS - 1))
             {
                 // Fixed walls
@@ -110,10 +123,27 @@ void initializeGameBoard()
             {
                 gameMap[i][j] = -1;
             }
+            //ghost house empty
+            else if((i == 11 && j >= 11) && (i == 11 && j <= 13))
+            {
+                gameMap[i][j] = 0;
+            }
+            else if((i == 13 && j >= 11) && (i == 13 && j <= 13))
+            {
+                gameMap[i][j] = 0;
+            }
+            else if((j == 11 && i >= 11) && (j == 11 && i <= 13))
+            {
+                gameMap[i][j] = 0;
+            }
+            else if((j == 13 && i >= 11) && (j == 13 && i <= 13))
+            {
+                gameMap[i][j] = 0;
+            }
             // Openings
             else if (i == 12 || j == 12)
             {
-                gameMap[i][j] = 0;
+                gameMap[i][j] = 2;
             }
             // Small square
             else if ((i == 6 && j >= 6) && (i == 6 && j <= 18))
@@ -172,11 +202,11 @@ void initializeGameBoard()
                 int randNum = rand() % 5; // Generate random number from 0 to 4
                 if (randNum == 2)
                 {
-                    gameMap[i][j] = 2 + rand() % 3; // Randomly assign power-up value (2, 3, or 4)
+                    gameMap[i][j] = 3 + rand() % 2; // Randomly assign power-up value (2, 3, or 4)
                 }
                 else
                 {
-                    gameMap[i][j] = 0;
+                    gameMap[i][j] = 2;
                 }
             }
         }
@@ -257,7 +287,15 @@ void movePacman()
         {
             cout << "Wall detected!" << endl;
         }
-        else if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 2 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 3)
+        else
+        {
+            // Move pacman
+            pthread_mutex_lock(&pacmanMutex);
+            pacman_x += pacman_direction_x * CELL_SIZE;
+            pacman_y += pacman_direction_y * CELL_SIZE;
+            pthread_mutex_unlock(&pacmanMutex);
+        }
+        if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 2 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 3)
         {
             // Handle scoring when encountering red (2) or white (3) balls
             pthread_mutex_lock(&pacmanMutex);
@@ -271,15 +309,7 @@ void movePacman()
             }
             pthread_mutex_unlock(&pacmanMutex);
         }
-        else
-        {
-            // Move pacman
-            pthread_mutex_lock(&pacmanMutex);
-            pacman_x += pacman_direction_x * CELL_SIZE;
-            pacman_y += pacman_direction_y * CELL_SIZE;
-            pthread_mutex_unlock(&pacmanMutex);
-        }
-        usleep(150000); // Sleep for 0.3 seconds
+        usleep(180000); // Sleep for 0.3 seconds
     }
 }
 
@@ -293,7 +323,7 @@ int main()
 
     // Load menu background texture from a PNG file
     sf::Texture menuTexture;
-    if (!menuTexture.loadFromFile("menu.png"))
+    if (!menuTexture.loadFromFile("img/menu.png"))
     {
         // Handle loading error
         std::cerr << "Failed to load menu background texture!" << std::endl;
@@ -305,7 +335,7 @@ int main()
 
     // Load font for menu text
     sf::Font menuFont;
-    menuFont.loadFromFile("arial.ttf"); // Change the file path as needed
+    menuFont.loadFromFile("font/pixelmix.ttf"); // Change the file path as needed
 
     // Create menu text
     sf::Text menuText;
@@ -343,9 +373,18 @@ int main()
 
     // Initialize game board
     initializeGameBoard();
+    //print game board
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLS; j++)
+        {
+            cout << gameMap[i][j] << " ";
+        }
+        cout << endl;
+    }
 
     // Create SFML window for the game
-    sf::RenderWindow window(sf::VideoMode(800, 800), "SFML window");
+    sf::RenderWindow window(sf::VideoMode(800, 900), "SFML window");
     // Create the yellow circle (player)
     sf::CircleShape pacman_shape(25 / 2);
     pacman_shape.setFillColor(sf::Color::Yellow);
@@ -353,14 +392,14 @@ int main()
 
     // Load font file for score display
     sf::Font font;
-    font.loadFromFile("arial.ttf"); // Change the file path as needed
+    font.loadFromFile("font/pixelmix.ttf"); // Change the file path as needed
 
     // Create score text
     sf::Text scoreText;
     scoreText.setFont(font);
-    scoreText.setCharacterSize(24);
+    scoreText.setCharacterSize(32);
     scoreText.setFillColor(sf::Color::White);
-    scoreText.setPosition(10, 10);
+    scoreText.setPosition(10, 850);
 
     // Create thread for user input
     pthread_t userInputThread;
