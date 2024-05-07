@@ -252,8 +252,13 @@ void* userInput(void* arg)
     pthread_exit(NULL);
 }
 // Function to handle movement
-void movePacman()
+void movePacman(void* arg)
 {
+    sf::Sprite* pacman_shape = (sf::Sprite*)arg;
+    //pacman rotation
+    int rotation = 0;
+    //pacman mouth closing
+    int mouth = 0;
     // Initial movement direction
     int pacman_direction_x = 0;
     int pacman_direction_y = 0;
@@ -266,18 +271,22 @@ void movePacman()
         case Keyboard::Up:
             pacman_direction_x = 0;
             pacman_direction_y = -1;
+            rotation = 270;
             break;
         case Keyboard::Down:
             pacman_direction_x = 0;
             pacman_direction_y = 1;
+            rotation = 90;
             break;
         case Keyboard::Left:
             pacman_direction_x = -1;
             pacman_direction_y = 0;
+            rotation = 180;
             break;
         case Keyboard::Right:
             pacman_direction_x = 1;
             pacman_direction_y = 0;
+            rotation = 0;
             break;
         default:
             break;
@@ -303,6 +312,8 @@ void movePacman()
             pacman_x += pacman_direction_x * CELL_SIZE;
             pacman_y += pacman_direction_y * CELL_SIZE;
             pthread_mutex_unlock(&pacmanMutex);
+            pacman_shape->setPosition(pacman_x + 25/2, pacman_y + 25/2); // Update pacman position
+            pacman_shape->setRotation(rotation);
         }
         if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 2 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 3)
         {
@@ -394,35 +405,150 @@ std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY
 // Function for ghost movement
 void moveGhost1(void* arg) { // smart movement
     sf::Sprite* ghost_shape = (sf::Sprite*)arg;
+    sf::Texture ghostTexture;
     while(1)
     {
         pthread_mutex_lock(&pacmanMutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
         pthread_mutex_unlock(&pacmanMutex);
+        //change texture to look at pacman
+        int diffX = pacX - ghost1X / CELL_SIZE;
+        int diffY = pacY - ghost1Y / CELL_SIZE;
+        if(abs(diffX) > abs(diffY))
+        {
+            if(diffX > 0)
+            {
+                if (!ghostTexture.loadFromFile("img/ghost1_1.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+            else
+            {
+                if (!ghostTexture.loadFromFile("img/ghost1_4.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+        }
+        else
+        {
+            if(diffY > 0)
+            {
+                if (!ghostTexture.loadFromFile("img/ghost1_3.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+            else
+            {
+                if (!ghostTexture.loadFromFile("img/ghost1_2.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+        }
         std::pair<int, int> nextMove = findNextMove(gameMap, ghost1X / CELL_SIZE, ghost1Y / CELL_SIZE, pacX, pacY);
         ghost1X = nextMove.first * CELL_SIZE;
         ghost1Y = nextMove.second* CELL_SIZE;
         ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
         usleep(200000); // Sleep for 0.3 seconds
     }
+    pthread_exit(NULL);
 }
 void moveGhost2(void* arg) { // random movement
+
     sf::Sprite* ghost_shape = (sf::Sprite*)arg;
+    Texture ghostTexture;
     while(1)
     {
         pthread_mutex_lock(&pacmanMutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
         pthread_mutex_unlock(&pacmanMutex);
-        cout <<"x"<<ghost1X / CELL_SIZE << " y" << ghost1Y / CELL_SIZE << endl;
-        std::pair<int, int> nextMove = {rand() % 2 - 1, rand() % 25};
-        ghost2X = (nextMove.first + ) * CELL_SIZE;
-        ghost2Y = nextMove.second* CELL_SIZE;
-        cout << "ghost x" << ghost1X /CELL_SIZE<< " ghost y" << ghost1Y/CELL_SIZE << endl;
-        ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
-        usleep(200000); // Sleep for 0.3 seconds
+        //change texture to look at pacman
+        int diffX = pacX - ghost2X / CELL_SIZE;
+        int diffY = pacY - ghost2Y / CELL_SIZE;
+        if(abs(diffX) > abs(diffY))
+        {
+            if(diffX > 0)
+            {
+                if (!ghostTexture.loadFromFile("img/ghost2_1.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+            else
+            {
+                if (!ghostTexture.loadFromFile("img/ghost2_4.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+        }
+        else
+        {
+            if(diffY > 0)
+            {
+                if (!ghostTexture.loadFromFile("img/ghost2_3.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+            else
+            {
+                if (!ghostTexture.loadFromFile("img/ghost2_2.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+        }
+        int nextMoveX;
+        int nextMoveY;
+        do
+        {
+
+            std::pair<int, int> nextMove = {rand() % 2 - rand()%2, rand() % 2  - rand()%2};
+            if(abs(nextMove.first) + abs(nextMove.second) != 1)
+            {
+                continue;
+            }
+            nextMoveX = (nextMove.first + ghost2X/CELL_SIZE) * CELL_SIZE;
+            nextMoveY = (nextMove.second + ghost2Y/CELL_SIZE)* CELL_SIZE;
+            cout << nextMoveX / CELL_SIZE << " " << nextMoveY / CELL_SIZE << endl;
+        }
+        while(!isValid( nextMoveX/CELL_SIZE,nextMoveY/CELL_SIZE,gameMap));
+        ghost2X = nextMoveX;
+        ghost2Y = nextMoveY;
+        ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4);
+        usleep(500000); // Sleep for 0.3 seconds
     }
+    pthread_exit(NULL);
 }
 
 
@@ -487,25 +613,24 @@ int main()
 
     // Initialize game board
     initializeGameBoard();
-    //print game board
-    for (int i = 0; i < ROWS; i++)
-    {
-        for (int j = 0; j < COLS; j++)
-        {
-            cout << gameMap[i][j] << " ";
-        }
-        cout << endl;
-    }
-
     // Create SFML window for the game
     sf::RenderWindow window(sf::VideoMode(800, 900), "SFML window");
-    // Create the yellow circle (player)
-    sf::CircleShape pacman_shape(25 / 2);
-    pacman_shape.setFillColor(sf::Color::Yellow);
-    pacman_shape.setPosition(25 / 8, 25 / 4); 
+
+    // Pacman Shape
+    Texture pacmanTexture;
+    if (!pacmanTexture.loadFromFile("img/pacman.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load pacman texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+    sf::Sprite pacman_shape(pacmanTexture);
+    pacman_shape.setOrigin(25/2, 25/2);
+    pacman_shape.setPosition(pacman_x, pacman_y);
+
     // Ghost Sprite
     sf::Texture ghostTexture1;
-    if (!ghostTexture1.loadFromFile("img/ghost1.png"))
+    if (!ghostTexture1.loadFromFile("img/ghost1_1.png"))
     {
         // Handle loading error
         std::cerr << "Failed to load ghost texture!" << std::endl;
@@ -514,9 +639,10 @@ int main()
     sf::Sprite ghost1(ghostTexture1);
     ghost1.setPosition(CELL_SIZE * 11, CELL_SIZE * 13);
     ghost1.setScale(1.1, 1.1);
+
     // Ghost Sprite 2
     sf::Texture ghostTexture2;
-    if (!ghostTexture2.loadFromFile("img/ghost2.png"))
+    if (!ghostTexture2.loadFromFile("img/ghost2_1.png"))
     {
         // Handle loading error
         std::cerr << "Failed to load ghost texture!" << std::endl;
@@ -543,11 +669,15 @@ int main()
 
     // Create thread for movement
     pthread_t moveThread;
-    pthread_create(&moveThread, nullptr, (void* (*)(void*))movePacman, nullptr);
+    pthread_create(&moveThread, nullptr, (void* (*)(void*))movePacman, &pacman_shape);
 
     //Create thread for ghost 1 movement
     pthread_t ghostThread;
     pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost1, &ghost1);
+
+    //Create thread for ghost 2 movement
+    pthread_t ghostThread2;
+    pthread_create(&ghostThread2, nullptr, (void* (*)(void*))moveGhost2, &ghost2);
 
     // Main loop
     while (window.isOpen())
@@ -555,13 +685,13 @@ int main()
         // Clear, draw, and display
         window.clear();
         drawGrid(window);
-        pacman_shape.setPosition(pacman_x, pacman_y); // Update pacman position
         window.draw(pacman_shape);                     // Draw the player (yellow circle)
 
         // Update and display score
         scoreText.setString("Score: " + std::to_string(score));
         window.draw(scoreText);
-        window.draw(ghost1); // Draw the ghost (white circle)
+        window.draw(ghost1); // Draw the ghost
+        window.draw(ghost2); // Draw the ghost
 
         window.display();
     }
@@ -569,6 +699,8 @@ int main()
     // Join threads
     pthread_join(userInputThread, nullptr);
     pthread_join(moveThread, nullptr);
+    pthread_join(ghostThread, nullptr);
+    pthread_join(ghostThread2, nullptr);
     // Destroy mutexes
     pthread_mutex_destroy(&inputMutex);
     pthread_mutex_destroy(&pacmanMutex);
