@@ -22,6 +22,8 @@ using namespace sf;
 // Define game grid
 int gameMap[ROWS][COLS] = {0};
 int score = 0;
+//bool afraid to check if ghost is afraid
+bool afraid = false;
 
 // Mutex to protect user input
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -37,6 +39,8 @@ int pacman_y = CELL_SIZE + 25 / 4;
 //ghost coordinates
 int ghost1X = CELL_SIZE * 11;
 int ghost1Y = CELL_SIZE * 13;
+int ghost2X = CELL_SIZE * 11;
+int ghost2Y = CELL_SIZE * 13;
 
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -308,7 +312,6 @@ void movePacman()
             if (ballValue != 0)
             { // Check if the ball hasn't been consumed already
                 score += ballValue;
-                cout << "Score: " << score << endl;
                 // Update the game grid to mark the ball as consumed
                 gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] = 0;
             }
@@ -373,7 +376,6 @@ std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY
             // call recursive function to find shortest path
             bool visited[ROWS][COLS] = {false};
             nextMove[i].second = shortestPath(x, y, pacmanX, pacmanY, gameMap);
-            cout<<"x"<<x<<" y"<<y<<" dist"<<nextMove[i].second<<endl;
         }
     }
 
@@ -390,8 +392,23 @@ std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY
     return nextMove[minIndex].first;
 }
 // Function for ghost movement
-void moveGhost(void* arg) {
-    sf::CircleShape* ghost_shape = (sf::CircleShape*)arg;
+void moveGhost1(void* arg) { // smart movement
+    sf::Sprite* ghost_shape = (sf::Sprite*)arg;
+    while(1)
+    {
+        pthread_mutex_lock(&pacmanMutex);
+        int pacX = pacman_x / CELL_SIZE;
+        int pacY = pacman_y / CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
+        std::pair<int, int> nextMove = findNextMove(gameMap, ghost1X / CELL_SIZE, ghost1Y / CELL_SIZE, pacX, pacY);
+        ghost1X = nextMove.first * CELL_SIZE;
+        ghost1Y = nextMove.second* CELL_SIZE;
+        ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
+        usleep(200000); // Sleep for 0.3 seconds
+    }
+}
+void moveGhost2(void* arg) { // random movement
+    sf::Sprite* ghost_shape = (sf::Sprite*)arg;
     while(1)
     {
         pthread_mutex_lock(&pacmanMutex);
@@ -399,15 +416,17 @@ void moveGhost(void* arg) {
         int pacY = pacman_y / CELL_SIZE;
         pthread_mutex_unlock(&pacmanMutex);
         cout <<"x"<<ghost1X / CELL_SIZE << " y" << ghost1Y / CELL_SIZE << endl;
-        std::pair<int, int> nextMove = findNextMove(gameMap, ghost1X / CELL_SIZE, ghost1Y / CELL_SIZE, pacX, pacY);
-        ghost1X = nextMove.first * CELL_SIZE;
-        ghost1Y = nextMove.second* CELL_SIZE;
+        std::pair<int, int> nextMove = {rand() % 2 - 1, rand() % 25};
+        ghost2X = (nextMove.first + ) * CELL_SIZE;
+        ghost2Y = nextMove.second* CELL_SIZE;
         cout << "ghost x" << ghost1X /CELL_SIZE<< " ghost y" << ghost1Y/CELL_SIZE << endl;
         ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
         usleep(200000); // Sleep for 0.3 seconds
     }
 }
 
+
+// Main function
 int main()
 {
     // Initialize random seed
@@ -484,10 +503,28 @@ int main()
     sf::CircleShape pacman_shape(25 / 2);
     pacman_shape.setFillColor(sf::Color::Yellow);
     pacman_shape.setPosition(25 / 8, 25 / 4); 
-    // WHite circle for ghost test
-    sf::CircleShape ghost_shape(25 / 2);
-    ghost_shape.setFillColor(sf::Color::White);
-    ghost_shape.setPosition(CELL_SIZE * 11, CELL_SIZE * 13); 
+    // Ghost Sprite
+    sf::Texture ghostTexture1;
+    if (!ghostTexture1.loadFromFile("img/ghost1.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load ghost texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+    sf::Sprite ghost1(ghostTexture1);
+    ghost1.setPosition(CELL_SIZE * 11, CELL_SIZE * 13);
+    ghost1.setScale(1.1, 1.1);
+    // Ghost Sprite 2
+    sf::Texture ghostTexture2;
+    if (!ghostTexture2.loadFromFile("img/ghost2.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load ghost texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+    sf::Sprite ghost2(ghostTexture2);
+    ghost2.setPosition(CELL_SIZE * 11, CELL_SIZE * 13);
+    ghost2.setScale(1.1, 1.1);
 
     // Load font file for score display
     sf::Font font;
@@ -510,7 +547,7 @@ int main()
 
     //Create thread for ghost 1 movement
     pthread_t ghostThread;
-    pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost, &ghost_shape);
+    pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost1, &ghost1);
 
     // Main loop
     while (window.isOpen())
@@ -524,7 +561,7 @@ int main()
         // Update and display score
         scoreText.setString("Score: " + std::to_string(score));
         window.draw(scoreText);
-        window.draw(ghost_shape); // Draw the ghost (white circle)
+        window.draw(ghost1); // Draw the ghost (white circle)
 
         window.display();
     }
