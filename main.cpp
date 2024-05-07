@@ -262,8 +262,15 @@ void movePacman(void* arg)
     // Initial movement direction
     int pacman_direction_x = 0;
     int pacman_direction_y = 0;
+    int prevDirectionX = 0;
+    int prevDirectionY = 0;
+    int prevRotation = 0;
     while (true)
     {
+        prevDirectionX = pacman_direction_x;
+        prevDirectionY = pacman_direction_y;
+        prevRotation = rotation;
+        // Lock mutex before accessing shared variable
         pthread_mutex_lock(&inputMutex);
         // Update movement based on current key
         switch (userInputKey)
@@ -303,18 +310,19 @@ void movePacman(void* arg)
         // Check if the next position is a wall
         if (abs(gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE]) == 1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -2)
         {
-            cout << "Wall detected!" << endl;
+            // If the next position is a wall, do not move
+            pacman_direction_x = prevDirectionX;
+            pacman_direction_y = prevDirectionY;
+            rotation = prevRotation;
         }
-        else
-        {
-            // Move pacman
-            pthread_mutex_lock(&pacmanMutex);
-            pacman_x += pacman_direction_x * CELL_SIZE;
-            pacman_y += pacman_direction_y * CELL_SIZE;
-            pthread_mutex_unlock(&pacmanMutex);
-            pacman_shape->setPosition(pacman_x + 25/2, pacman_y + 25/2); // Update pacman position
-            pacman_shape->setRotation(rotation);
-        }
+       
+        // Move pacman
+        pthread_mutex_lock(&pacmanMutex);
+        pacman_x += pacman_direction_x * CELL_SIZE;
+        pacman_y += pacman_direction_y * CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
+        pacman_shape->setPosition(pacman_x + 25/2, pacman_y + 25/2); // Update pacman position
+        pacman_shape->setRotation(rotation);
         if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 2 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 3)
         {
             // Handle scoring when encountering red (2) or white (3) balls
@@ -669,15 +677,15 @@ int main()
 
     // Create thread for movement
     pthread_t moveThread;
-    pthread_create(&moveThread, nullptr, (void* (*)(void*))movePacman, &pacman_shape);
+    pthread_create(&moveThread, nullptr, (void* ()(void))movePacman, &pacman_shape);
 
     //Create thread for ghost 1 movement
     pthread_t ghostThread;
-    pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost1, &ghost1);
+    pthread_create(&ghostThread, nullptr, (void* ()(void))moveGhost1, &ghost1);
 
     //Create thread for ghost 2 movement
     pthread_t ghostThread2;
-    pthread_create(&ghostThread2, nullptr, (void* (*)(void*))moveGhost2, &ghost2);
+    pthread_create(&ghostThread2, nullptr, (void* ()(void))moveGhost2, &ghost2);
 
     // Main loop
     while (window.isOpen())
