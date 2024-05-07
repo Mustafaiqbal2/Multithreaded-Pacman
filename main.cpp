@@ -485,87 +485,85 @@ void moveGhost1(void* arg) { // smart movement
     }
     pthread_exit(NULL);
 }
-void moveGhost2(void* arg) { // random movement
+void moveGhost2(void* arg) { // random movement with direction persistence
 
     sf::Sprite* ghost_shape = (sf::Sprite*)arg;
-    Texture ghostTexture;
+    sf::Texture ghostTexture;
+    int direction = rand() % 4; // Random initial direction
+ int ghost2X = 100;
+    int ghost2Y = 200;
+    ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4); // Adjust position based on sprite size
+
     while(1)
     {
         pthread_mutex_lock(&pacmanMutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
         pthread_mutex_unlock(&pacmanMutex);
-        //change texture to look at pacman
-        int diffX = pacX - ghost2X / CELL_SIZE;
-        int diffY = pacY - ghost2Y / CELL_SIZE;
-        if(abs(diffX) > abs(diffY))
-        {
-            if(diffX > 0)
-            {
-                if (!ghostTexture.loadFromFile("img/ghost2_1.png"))
-                {
-                    // Handle loading error
-                    std::cerr << "Failed to load ghost texture!" << std::endl;
-                    return; // Exit the program or handle the error appropriately
-                }
-                ghost_shape->setTexture(ghostTexture);
-            }
-            else
-            {
-                if (!ghostTexture.loadFromFile("img/ghost2_4.png"))
-                {
-                    // Handle loading error
-                    std::cerr << "Failed to load ghost texture!" << std::endl;
-                    return; // Exit the program or handle the error appropriately
-                }
-                ghost_shape->setTexture(ghostTexture);
-            }
-        }
-        else
-        {
-            if(diffY > 0)
-            {
-                if (!ghostTexture.loadFromFile("img/ghost2_3.png"))
-                {
-                    // Handle loading error
-                    std::cerr << "Failed to load ghost texture!" << std::endl;
-                    return; // Exit the program or handle the error appropriately
-                }
-                ghost_shape->setTexture(ghostTexture);
-            }
-            else
-            {
-                if (!ghostTexture.loadFromFile("img/ghost2_2.png"))
-                {
-                    // Handle loading error
-                    std::cerr << "Failed to load ghost texture!" << std::endl;
-                    return; // Exit the program or handle the error appropriately
-                }
-                ghost_shape->setTexture(ghostTexture);
-            }
-        }
+
         int nextMoveX;
         int nextMoveY;
-        do
-        {
 
-            std::pair<int, int> nextMove = {rand() % 2 - rand()%2, rand() % 2  - rand()%2};
-            if(abs(nextMove.first) + abs(nextMove.second) != 1)
-            {
-                continue;
-            }
-            nextMoveX = (nextMove.first + ghost2X/CELL_SIZE) * CELL_SIZE;
-            nextMoveY = (nextMove.second + ghost2Y/CELL_SIZE)* CELL_SIZE;
-            cout << nextMoveX / CELL_SIZE << " " << nextMoveY / CELL_SIZE << endl;
+        std::pair<int, int> nextMove = {0, 0};
+        switch(direction) {
+            case 0: // Move right
+                nextMove = {1, 0};
+                break;
+            case 1: // Move left
+                nextMove = {-1, 0};
+                break;
+            case 2: // Move down
+                nextMove = {0, 1};
+                break;
+            case 3: // Move up
+                nextMove = {0, -1};
+                break;
         }
-        while(!isValid( nextMoveX/CELL_SIZE,nextMoveY/CELL_SIZE,gameMap));
-        ghost2X = nextMoveX;
-        ghost2Y = nextMoveY;
-        ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4);
-        usleep(500000); // Sleep for 0.3 seconds
+
+        nextMoveX = (nextMove.first + ghost2X/CELL_SIZE) * CELL_SIZE;
+        nextMoveY = (nextMove.second + ghost2Y/CELL_SIZE) * CELL_SIZE;
+
+        if (isValid( nextMoveX/CELL_SIZE, nextMoveY/CELL_SIZE, gameMap)) {
+            // If the move is valid, update ghost position
+            ghost2X = nextMoveX;
+            ghost2Y = nextMoveY;
+            ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4);
+
+            // Load ghost texture based on direction
+            std::string ghostTextureFile;
+            switch(direction) {
+                case 0: // Move right
+                    ghostTextureFile = "img/ghost2_1.png";
+                    break;
+                case 1: // Move left
+                    ghostTextureFile = "img/ghost2_4.png";
+                    break;
+                case 2: // Move down
+                    ghostTextureFile = "img/ghost2_3.png";
+                    break;
+                case 3: // Move up
+                    ghostTextureFile = "img/ghost2_2.png";
+                    break;
+            }
+            if (!ghostTexture.loadFromFile(ghostTextureFile))
+            {
+                // Handle loading error
+                std::cerr << "Failed to load ghost texture!" << std::endl;
+                return; // Exit the program or handle the error appropriately
+            }
+            ghost_shape->setTexture(ghostTexture);
+        } else {
+            // If the move is invalid (wall encountered), choose a new random direction
+            direction = rand() % 4;
+        }
+
+        usleep(500000); // Sleep for 0.5 seconds
     }
     pthread_exit(NULL);
 }
+
+
+
 
 
 // Main function
