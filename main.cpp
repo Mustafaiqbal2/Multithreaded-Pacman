@@ -481,17 +481,16 @@ void moveGhost1(void* arg) { // smart movement
         ghost1X = nextMove.first * CELL_SIZE;
         ghost1Y = nextMove.second* CELL_SIZE;
         ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
-        usleep(200000); // Sleep for 0.3 seconds
+        usleep(400000); // Sleep for 0.3 seconds
     }
     pthread_exit(NULL);
 }
-void moveGhost2(void* arg) { // random movement with direction persistence
+void moveGhost2(void* arg) 
+{ // random movement with direction persistence
 
     sf::Sprite* ghost_shape = (sf::Sprite*)arg;
     sf::Texture ghostTexture;
-    int direction = rand() % 4; // Random initial direction
- int ghost2X = 100;
-    int ghost2Y = 200;
+    pair<int,int> direction =  {1,0}; // Random initial direction
     ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4); // Adjust position based on sprite size
 
     while(1)
@@ -505,58 +504,65 @@ void moveGhost2(void* arg) { // random movement with direction persistence
         int nextMoveY;
 
         std::pair<int, int> nextMove = {0, 0};
-        switch(direction) {
-            case 0: // Move right
-                nextMove = {1, 0};
-                break;
-            case 1: // Move left
-                nextMove = {-1, 0};
-                break;
-            case 2: // Move down
-                nextMove = {0, 1};
-                break;
-            case 3: // Move up
-                nextMove = {0, -1};
-                break;
-        }
+        //find if any turns
 
+        int rando = ((rand()%2)-(rand()%2));
+        if(abs(direction.first) == 1)
+        {
+            while(rando == 0)
+                rando = ((rand()%2)-(rand()%2));
+            if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE+(rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE+(-rando), ghost2Y/CELL_SIZE + (rando), gameMap))
+                nextMove = {0,rando};
+            else if(isValid(ghost2X/CELL_SIZE , ghost2Y/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghost2X/CELL_SIZE+(rando), ghost2Y/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghost2X/CELL_SIZE+(-rando), ghost2Y/CELL_SIZE + (rando*-1), gameMap))
+                nextMove = {0,-rando};
+            else if(isValid(ghost2X/CELL_SIZE + direction.first, ghost2Y/CELL_SIZE, gameMap))
+                nextMove = {direction.first,0};
+            else if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE + (rando), gameMap))
+                nextMove = {0,rando};
+            else if(isValid(ghost2X/CELL_SIZE , ghost2Y/CELL_SIZE + (rando*-1), gameMap))
+                nextMove = {0,-rando};
+            else
+                nextMove = {-direction.first,0};
+        }
+        else
+        {
+            while(rando == 0)
+                rando = ((rand()%2)-(rand()%2));
+            if(isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE, gameMap) && !isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE + (-rando), gameMap))
+                nextMove = {rando,0};
+            else if(isValid(ghost2X/CELL_SIZE+ (rando*-1), ghost2Y/CELL_SIZE, gameMap)&& !isValid(ghost2X/CELL_SIZE  + (-rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE  + (-rando), ghost2Y/CELL_SIZE + (-rando), gameMap))
+                nextMove = {-rando,0};
+            else if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE  + direction.second, gameMap))
+                nextMove = {0,direction.second};
+            else if(isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE, gameMap))
+                nextMove = {rando,0};
+            else if(isValid(ghost2X/CELL_SIZE+ (rando*-1), ghost2Y/CELL_SIZE, gameMap))
+                nextMove = {-rando,0};
+            else
+                nextMove =  {0,-direction.second};
+        }
         nextMoveX = (nextMove.first + ghost2X/CELL_SIZE) * CELL_SIZE;
         nextMoveY = (nextMove.second + ghost2Y/CELL_SIZE) * CELL_SIZE;
-
-        if (isValid( nextMoveX/CELL_SIZE, nextMoveY/CELL_SIZE, gameMap)) {
-            // If the move is valid, update ghost position
-            ghost2X = nextMoveX;
-            ghost2Y = nextMoveY;
-            ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4);
-
-            // Load ghost texture based on direction
-            std::string ghostTextureFile;
-            switch(direction) {
-                case 0: // Move right
-                    ghostTextureFile = "img/ghost2_1.png";
-                    break;
-                case 1: // Move left
-                    ghostTextureFile = "img/ghost2_4.png";
-                    break;
-                case 2: // Move down
-                    ghostTextureFile = "img/ghost2_3.png";
-                    break;
-                case 3: // Move up
-                    ghostTextureFile = "img/ghost2_2.png";
-                    break;
-            }
-            if (!ghostTexture.loadFromFile(ghostTextureFile))
-            {
-                // Handle loading error
-                std::cerr << "Failed to load ghost texture!" << std::endl;
-                return; // Exit the program or handle the error appropriately
-            }
-            ghost_shape->setTexture(ghostTexture);
-        } else {
-            // If the move is invalid (wall encountered), choose a new random direction
-            direction = rand() % 4;
+        std::string ghostTextureFile;
+        direction = nextMove;
+        if(direction.first == 1)// right
+            ghostTextureFile = "img/ghost2_1.png";
+        else if(direction.first == -1)//left
+            ghostTextureFile = "img/ghost2_4.png";
+        else if(direction.second == 1)//down
+            ghostTextureFile = "img/ghost2_3.png";
+        else
+            ghostTextureFile = "img/ghost2_2.png";
+        if (!ghostTexture.loadFromFile(ghostTextureFile))
+        {
+            // Handle loading error
+            std::cerr << "Failed to load ghost texture!" << std::endl;
+            return; // Exit the program or handle the error appropriately
         }
-
+        ghost_shape->setTexture(ghostTexture);
+        ghost2X = nextMoveX;
+        ghost2Y = nextMoveY;
+        ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4);
         usleep(500000); // Sleep for 0.5 seconds
     }
     pthread_exit(NULL);
