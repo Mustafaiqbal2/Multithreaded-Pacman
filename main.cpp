@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <pthread.h>
+#include <semaphore.h>
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
 #include <SFML/Window.hpp>
@@ -17,6 +18,11 @@
 
 using namespace std;
 using namespace sf;
+//semaphores for key and permit for ghosts
+sem_t key;
+sem_t permit;
+//semaphore for speed boosts
+sem_t speed;
 
 // Define game entities
 // Define game grid
@@ -42,9 +48,13 @@ int pacman_x = CELL_SIZE + 25 / 8;
 int pacman_y = CELL_SIZE + 25 / 4;
 //ghost coordinates
 int ghost1X = CELL_SIZE * 11;
-int ghost1Y = CELL_SIZE * 13;
-int ghost2X = CELL_SIZE * 11;
-int ghost2Y = CELL_SIZE * 13;
+int ghost2X = CELL_SIZE * 12;
+int ghost3X = CELL_SIZE * 13;
+int ghost4X = CELL_SIZE * 12;
+int ghost1Y = CELL_SIZE * 11;
+int ghost2Y = CELL_SIZE * 11;
+int ghost3Y = CELL_SIZE * 11;
+int ghost4Y = CELL_SIZE * 12;
 // Function to check if a cell is valid
 bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
     return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
@@ -451,27 +461,12 @@ std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY
 
     return nextMove[minIndex].first;
 }
-// Function for ghost movement
-void moveGhost1(void* arg) { // smart movement
-    sf::Sprite* ghost_shape = (sf::Sprite*)arg;
-    sf::Texture ghostTexture;
-    while(1)
+//Ghost Eyes 1
+void changeEyes(Texture& ghostTexture,Sprite* ghost_shape, int diffX, int diffY,int gNum)
+{
+    switch(gNum)
     {
-        pthread_mutex_lock(&closedMutex);
-        if(closed)
-        {
-            pthread_mutex_unlock(&closedMutex);
-            break;
-        }
-        pthread_mutex_unlock(&closedMutex);
-        pthread_mutex_lock(&pacmanMutex);
-        int pacX = pacman_x / CELL_SIZE;
-        int pacY = pacman_y / CELL_SIZE;
-        pthread_mutex_unlock(&pacmanMutex);
-
-        //change texture to look at pacman
-        int diffX = pacX - ghost1X / CELL_SIZE;
-        int diffY = pacY - ghost1Y / CELL_SIZE;
+    case 1:
         if(abs(diffX) > abs(diffY))
         {
             if(diffX > 0)
@@ -518,22 +513,172 @@ void moveGhost1(void* arg) { // smart movement
                 ghost_shape->setTexture(ghostTexture);
             }
         }
-        std::pair<int, int> nextMove = findNextMove(gameMap, ghost1X / CELL_SIZE, ghost1Y / CELL_SIZE, pacX, pacY);
-        ghost1X = nextMove.first * CELL_SIZE;
-        ghost1Y = nextMove.second* CELL_SIZE;
-        ghost_shape->setPosition(ghost1X + 25/8, ghost1Y + 25/4);
+        break;
+    case 3:
+        if(abs(diffX) > abs(diffY))
+        {
+            if(diffX > 0)
+            {
+                if (!ghostTexture.loadFromFile("img/ghost3_1.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+            else
+            {
+                if (!ghostTexture.loadFromFile("img/ghost3_4.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+        }
+        else
+        {
+            if(diffY > 0)
+            {
+                if (!ghostTexture.loadFromFile("img/ghost3_3.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+            else
+            {
+                if (!ghostTexture.loadFromFile("img/ghost3_2.png"))
+                {
+                    // Handle loading error
+                    std::cerr << "Failed to load ghost texture!" << std::endl;
+                    return; // Exit the program or handle the error appropriately
+                }
+                ghost_shape->setTexture(ghostTexture);
+            }
+        }
+        break;
+    }
+}
+void bob(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos)
+{
+    float time = clock.getElapsedTime().asSeconds();
+    if(time >= 0.5)
+    {
+        ghost_shape->move(0, pos);
+        clock.restart();
+        pos = -pos;
+    }
+}
+
+// Function for ghost movement
+void moveGhost1(void* arg) { // smart movement
+    void ** args = (void**)arg;
+    int* gN0 = (int*)args[0];
+    int gNum = *gN0;
+    int& ghostX = (gNum == 1 ? ghost1X : ghost3X);
+    int& ghostY = (gNum == 1 ? ghost1Y : ghost3Y);
+    sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
+    sf::Texture ghostTexture;
+    sf::Clock clock;
+    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
+    // bob up and down while waiting for key
+    int pos = 25;
+    while(1)
+    {
+        bob(clock, ghost_shape,pos);
+    }
+    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
+    while(1)
+    {
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            break;
+        }
+        pthread_mutex_unlock(&closedMutex);
+        pthread_mutex_lock(&pacmanMutex);
+        int pacX = pacman_x / CELL_SIZE;
+        int pacY = pacman_y / CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
+
+        int diffX = pacX - ghostX / CELL_SIZE;
+        int diffY = pacY - ghostY / CELL_SIZE;
+        //change texture to look at pacman
+        changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
+
+        std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
+        ghostX = nextMove.first * CELL_SIZE;
+        ghostY = nextMove.second* CELL_SIZE;
+        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         usleep(400000); // Sleep for 0.3 seconds
     }
     pthread_exit(NULL);
 }
+void changeEyes2(pair<int,int> direction, sf::Sprite* ghost_shape, sf::Texture& ghostTexture, int gNum)
+{
+    std::string ghostTextureFile;
+    switch(gNum)
+    {
+    case 2:
+        if(direction.first == 1)// right
+            ghostTextureFile = "img/ghost2_1.png";
+        else if(direction.first == -1)//left
+            ghostTextureFile = "img/ghost2_4.png";
+        else if(direction.second == 1)//down
+            ghostTextureFile = "img/ghost2_3.png";
+        else
+            ghostTextureFile = "img/ghost2_2.png";
+        if (!ghostTexture.loadFromFile(ghostTextureFile))
+        {
+            // Handle loading error
+            std::cerr << "Failed to load ghost texture!" << std::endl;
+            return; // Exit the program or handle the error appropriately
+        }
+        ghost_shape->setTexture(ghostTexture);
+        break;
+    case 4:
+        if(direction.first == 1)// right
+            ghostTextureFile = "img/ghost4_1.png";
+        else if(direction.first == -1)//left
+            ghostTextureFile = "img/ghost4_4.png";
+        else if(direction.second == 1)//down
+            ghostTextureFile = "img/ghost4_3.png";
+        else
+            ghostTextureFile = "img/ghost4_2.png";
+        if (!ghostTexture.loadFromFile(ghostTextureFile))
+        {
+            // Handle loading error
+            std::cerr << "Failed to load ghost texture!" << std::endl;
+            return; // Exit the program or handle the error appropriately
+        }
+        ghost_shape->setTexture(ghostTexture);
+        break;
+    }
+}
 void moveGhost2(void* arg) 
 { // random movement with direction persistence
-
-    sf::Sprite* ghost_shape = (sf::Sprite*)arg;
+    void** args = (void**)arg;
+    int* gN0 = (int*)args[0];
+    int gNum = *gN0;
+    cout<<gNum<<endl;
+    int &ghostX = (gNum == 2 ? ghost2X : ghost4X);
+    int &ghostY = (gNum == 2 ? ghost2Y : ghost4Y);
+    sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
     sf::Texture ghostTexture;
     pair<int,int> direction =  {1,0}; // Random initial direction
-    ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4); // Adjust position based on sprite size
-
+    sf::Clock clock;
+    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
+    int pos = 25;
+    while(1)
+    {
+        bob(clock, ghost_shape,pos);
+    }
     while(1)
     {
         pthread_mutex_lock(&closedMutex);
@@ -560,15 +705,15 @@ void moveGhost2(void* arg)
             while(rando == 0)
                 rando = ((rand()%2)-(rand()%2));
             pthread_mutex_lock(&gameMapMutex);
-            if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE+(rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE+(-rando), ghost2Y/CELL_SIZE + (rando), gameMap))
+            if(isValid(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE+(rando), ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE+(-rando), ghostY/CELL_SIZE + (rando), gameMap))
                 nextMove = {0,rando};
-            else if(isValid(ghost2X/CELL_SIZE , ghost2Y/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghost2X/CELL_SIZE+(rando), ghost2Y/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghost2X/CELL_SIZE+(-rando), ghost2Y/CELL_SIZE + (rando*-1), gameMap))
+            else if(isValid(ghostX/CELL_SIZE , ghostY/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghostX/CELL_SIZE+(rando), ghostY/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghostX/CELL_SIZE+(-rando), ghostY/CELL_SIZE + (rando*-1), gameMap))
                 nextMove = {0,-rando};
-            else if(isValid(ghost2X/CELL_SIZE + direction.first, ghost2Y/CELL_SIZE, gameMap))
+            else if(isValid(ghostX/CELL_SIZE + direction.first, ghostY/CELL_SIZE, gameMap))
                 nextMove = {direction.first,0};
-            else if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE + (rando), gameMap))
+            else if(isValid(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando), gameMap))
                 nextMove = {0,rando};
-            else if(isValid(ghost2X/CELL_SIZE , ghost2Y/CELL_SIZE + (rando*-1), gameMap))
+            else if(isValid(ghostX/CELL_SIZE , ghostY/CELL_SIZE + (rando*-1), gameMap))
                 nextMove = {0,-rando};
             else
                 nextMove = {-direction.first,0};
@@ -579,48 +724,32 @@ void moveGhost2(void* arg)
             while(rando == 0)
                 rando = ((rand()%2)-(rand()%2));
             pthread_mutex_lock(&gameMapMutex);
-            if(isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE, gameMap) && !isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE + (-rando), gameMap))
+            if(isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE, gameMap) && !isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE + (-rando), gameMap))
                 nextMove = {rando,0};
-            else if(isValid(ghost2X/CELL_SIZE+ (rando*-1), ghost2Y/CELL_SIZE, gameMap)&& !isValid(ghost2X/CELL_SIZE  + (-rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE  + (-rando), ghost2Y/CELL_SIZE + (-rando), gameMap))
+            else if(isValid(ghostX/CELL_SIZE+ (rando*-1), ghostY/CELL_SIZE, gameMap)&& !isValid(ghostX/CELL_SIZE  + (-rando), ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE  + (-rando), ghostY/CELL_SIZE + (-rando), gameMap))
                 nextMove = {-rando,0};
-            else if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE  + direction.second, gameMap))
+            else if(isValid(ghostX/CELL_SIZE, ghostY/CELL_SIZE  + direction.second, gameMap))
                 nextMove = {0,direction.second};
-            else if(isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE, gameMap))
+            else if(isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE, gameMap))
                 nextMove = {rando,0};
-            else if(isValid(ghost2X/CELL_SIZE+ (rando*-1), ghost2Y/CELL_SIZE, gameMap))
+            else if(isValid(ghostX/CELL_SIZE+ (rando*-1), ghostY/CELL_SIZE, gameMap))
                 nextMove = {-rando,0};
             else
                 nextMove =  {0,-direction.second};
             pthread_mutex_unlock(&gameMapMutex);
         }
-        nextMoveX = (nextMove.first + ghost2X/CELL_SIZE) * CELL_SIZE;
-        nextMoveY = (nextMove.second + ghost2Y/CELL_SIZE) * CELL_SIZE;
-        std::string ghostTextureFile;
+        nextMoveX = (nextMove.first + ghostX/CELL_SIZE) * CELL_SIZE;
+        nextMoveY = (nextMove.second + ghostY/CELL_SIZE) * CELL_SIZE;
         direction = nextMove;
-        if(direction.first == 1)// right
-            ghostTextureFile = "img/ghost2_1.png";
-        else if(direction.first == -1)//left
-            ghostTextureFile = "img/ghost2_4.png";
-        else if(direction.second == 1)//down
-            ghostTextureFile = "img/ghost2_3.png";
-        else
-            ghostTextureFile = "img/ghost2_2.png";
-        if (!ghostTexture.loadFromFile(ghostTextureFile))
-        {
-            // Handle loading error
-            std::cerr << "Failed to load ghost texture!" << std::endl;
-            return; // Exit the program or handle the error appropriately
-        }
-        ghost_shape->setTexture(ghostTexture);
-        ghost2X = nextMoveX;
-        ghost2Y = nextMoveY;
-        ghost_shape->setPosition(ghost2X + 25/8, ghost2Y + 25/4);
+        //change texture to look at forward
+        changeEyes2(direction,ghost_shape,ghostTexture,gNum);
+        ghostX = nextMoveX;
+        ghostY = nextMoveY;
+        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         usleep(500000); // Sleep for 0.5 seconds
     }
     pthread_exit(NULL);
 }
-
-
 
 
 
@@ -687,7 +816,15 @@ int main()
     initializeGameBoard();
     // Create SFML window for the game
     sf::RenderWindow window(sf::VideoMode(800, 900), "SFML window");
+    //2 keys and 2 permits for ghosts
+    sem_init(&key, 0, 2);
+    sem_init(&permit, 0, 2);
+    //2 speed boosts
+    sem_init(&speed, 0, 2);
 
+    //sem_timedwait will be used for speed boost to make sure ghost contniues its movement
+    //priority queue will be used to prioritize the ghosts
+    
     // Pacman Shape
     Texture pacmanTexture;
     if (!pacmanTexture.loadFromFile("img/pacman.png"))
@@ -724,6 +861,30 @@ int main()
     ghost2.setPosition(CELL_SIZE * 11, CELL_SIZE * 13);
     ghost2.setScale(1.1, 1.1);
 
+    // Ghost Sprite 3
+    sf::Texture ghostTexture3;
+    if (!ghostTexture3.loadFromFile("img/ghost3_1.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load ghost texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+    sf::Sprite ghost3(ghostTexture3);
+    ghost3.setPosition(CELL_SIZE * 11, CELL_SIZE * 13);
+    ghost3.setScale(1.1, 1.1);
+
+    // Ghost Sprite 4
+    sf::Texture ghostTexture4;
+    if (!ghostTexture4.loadFromFile("img/ghost4_1.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load ghost texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+    sf::Sprite ghost4(ghostTexture4);
+    ghost4.setPosition(CELL_SIZE * 11, CELL_SIZE * 13);
+    ghost4.setScale(1.1, 1.1);
+
     // Load font file for score display
     sf::Font font;
     font.loadFromFile("font/pixelmix.ttf"); // Change the file path as needed
@@ -734,7 +895,7 @@ int main()
     scoreText.setCharacterSize(32);
     scoreText.setFillColor(sf::Color::White);
     scoreText.setPosition(10, 850);
-
+    //placeholder for multiple arguments
     // Create thread for user input
     pthread_t userInputThread;
     pthread_create(&userInputThread, nullptr, userInput, &window);
@@ -745,11 +906,35 @@ int main()
 
     //Create thread for ghost 1 movement
     pthread_t ghostThread;
-    pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost1, &ghost1);
+    void* args[2];
+    int gNo = 1;
+    args[0] = &gNo;
+    args[1] = &ghost1;
+    pthread_create(&ghostThread, nullptr, (void* (*)(void*))moveGhost1, args);
 
     //Create thread for ghost 2 movement
     pthread_t ghostThread2;
-    pthread_create(&ghostThread2, nullptr, (void* (*)(void*))moveGhost2, &ghost2);
+    void* args2[2];
+    int gNo2 = 2;
+    args2[0] = &gNo2;
+    args2[1] = &ghost2;
+    pthread_create(&ghostThread2, nullptr, (void* (*)(void*))moveGhost2, args2);
+
+    // Create thread for ghost 3 movement
+    pthread_t ghostThread3;
+    int gNo3 = 3;
+    void* args3[2];
+    args3[0] = &gNo3;
+    args3[1] = &ghost3;
+    pthread_create(&ghostThread3, nullptr, (void* (*)(void*))moveGhost1, args3);
+
+    // Create thread for ghost 4 movement
+    pthread_t ghostThread4;
+    int gNo4 = 4;
+    void* args4[2];
+    args4[0] = &gNo4;
+    args4[1] = &ghost4;
+    pthread_create(&ghostThread4, nullptr, (void* (*)(void*))moveGhost2, args4);
 
     // Main loop
     while (window.isOpen())
@@ -764,6 +949,8 @@ int main()
         window.draw(scoreText);
         window.draw(ghost1); // Draw the ghost
         window.draw(ghost2); // Draw the ghost
+        window.draw(ghost3); // Draw the ghost
+        window.draw(ghost4); // Draw the ghost
 
         window.display();
         pthread_mutex_lock(&closedMutex);
