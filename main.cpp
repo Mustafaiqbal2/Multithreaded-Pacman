@@ -24,11 +24,15 @@ int gameMap[ROWS][COLS] = {0};
 int score = 0;
 //bool afraid to check if ghost is afraid
 bool afraid = false;
-
+bool closed = false;
 // Mutex to protect user input
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
 // Mutex to protect pacman position
 pthread_mutex_t pacmanMutex = PTHREAD_MUTEX_INITIALIZER;
+// Mutex for game map
+pthread_mutex_t gameMapMutex = PTHREAD_MUTEX_INITIALIZER;
+//mutex for closed
+pthread_mutex_t closedMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Shared variable for user input
 Keyboard::Key userInputKey = Keyboard::Unknown;
@@ -41,7 +45,10 @@ int ghost1X = CELL_SIZE * 11;
 int ghost1Y = CELL_SIZE * 13;
 int ghost2X = CELL_SIZE * 11;
 int ghost2Y = CELL_SIZE * 13;
-
+// Function to check if a cell is valid
+bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
+    return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
+}
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
 {
@@ -53,7 +60,10 @@ void drawGrid(sf::RenderWindow& window)
         for (int j = 0; j < COLS; j++)
         {
             // Draw pellets, power-ups, and walls
-            switch (gameMap[i][j])
+            pthread_mutex_lock(&gameMapMutex);
+            int value = gameMap[i][j];
+            pthread_mutex_unlock(&gameMapMutex);
+            switch (value)
             {
             case 2:
                 // Draw small white circle for pellet
@@ -236,7 +246,10 @@ void* userInput(void* arg)
         {
             if (event.type == Event::Closed)
             {
-                window->close();
+                //window->close();
+                pthread_mutex_lock(&closedMutex);
+                closed = true;
+                pthread_mutex_unlock(&closedMutex);
                 exit(1);
             }
             else if (event.type == Event::KeyPressed)
@@ -268,6 +281,13 @@ void movePacman(void* arg)
     int prevRotation = 0;
     while (true)
     {
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            break;
+        }
+        pthread_mutex_unlock(&closedMutex);
         prevX = pacman_direction_x;
         prevY = pacman_direction_y;
         prevRotation = rotation;
@@ -309,7 +329,10 @@ void movePacman(void* arg)
         pthread_mutex_unlock(&pacmanMutex);
 
         // Check if the next position is a wall
-        if (abs(gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE]) == 1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -1 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == -2)
+        pthread_mutex_lock(&gameMapMutex);
+        bool valid = isValid(nextX / CELL_SIZE, nextY / CELL_SIZE, gameMap);
+        pthread_mutex_unlock(&gameMapMutex);
+        if (!valid)
         {
             // If it is a wall, do not update the position
             rotation = prevRotation;
@@ -328,27 +351,31 @@ void movePacman(void* arg)
         pthread_mutex_lock(&pacmanMutex);
         pacman_x += pacman_direction_x * CELL_SIZE;
         pacman_y += pacman_direction_y * CELL_SIZE;
+        nextX = pacman_x;
+        nextY = pacman_y;
         pthread_mutex_unlock(&pacmanMutex);
-        pacman_shape->setPosition(pacman_x + 25/2, pacman_y + 25/2); // Update pacman position
+        pacman_shape->setPosition(nextX + 25/2, nextY + 25/2); // Update pacman position
         pacman_shape->setRotation(rotation);
-        if (gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 2 || gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] == 3)
+        pthread_mutex_lock(&gameMapMutex);
+        int value = gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE];
+        pthread_mutex_unlock(&gameMapMutex);
+        if ( value == 2 || value == 3)
         {
             // Handle scoring when encountering red (2) or white (3) balls
-            pthread_mutex_lock(&pacmanMutex);
+            pthread_mutex_lock(&gameMapMutex);
             int ballValue = gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE];
+            pthread_mutex_unlock(&gameMapMutex);
             if (ballValue != 0)
             { // Check if the ball hasn't been consumed already
                 score += ballValue;
                 // Update the game grid to mark the ball as consumed
+                pthread_mutex_lock(&gameMapMutex);
                 gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] = 0;
+                pthread_mutex_unlock(&gameMapMutex);
             }
-            pthread_mutex_unlock(&pacmanMutex);
         }
         usleep(180000); // Sleep for 0.3 seconds
     }
-}
-bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
-    return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
 }
 int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS][COLS]) {
     bool visited[ROWS][COLS] = {false};
@@ -376,7 +403,10 @@ int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS]
             int newY = y + dy[i];
 
             // Check validity and unvisited status
-            if (isValid(newX, newY, gameMap) && !visited[newX][newY]) {
+            pthread_mutex_lock(&gameMapMutex);
+            bool valid = isValid(newX, newY, gameMap);
+            pthread_mutex_unlock(&gameMapMutex);
+            if (valid && !visited[newX][newY]) {
                 q.push({newX, newY});
                 visited[newX][newY] = true;
                 dist[newX][newY] = dist[x][y] + 1; // Update distance
@@ -398,7 +428,10 @@ std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY
         int x = ghostX + dx[i];
         int y = ghostY + dy[i];
         nextMove[i] = {{-1, -1}, INT_MAX};
-        if (isValid(x, y, gameMap)) {
+        pthread_mutex_lock(&gameMapMutex);
+        bool valid = isValid(x, y, gameMap);
+        pthread_mutex_unlock(&gameMapMutex);
+        if (valid) {
             nextMove[i].first = {x, y};
             // call recursive function to find shortest path
             bool visited[ROWS][COLS] = {false};
@@ -424,10 +457,18 @@ void moveGhost1(void* arg) { // smart movement
     sf::Texture ghostTexture;
     while(1)
     {
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            break;
+        }
+        pthread_mutex_unlock(&closedMutex);
         pthread_mutex_lock(&pacmanMutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
         pthread_mutex_unlock(&pacmanMutex);
+
         //change texture to look at pacman
         int diffX = pacX - ghost1X / CELL_SIZE;
         int diffY = pacY - ghost1Y / CELL_SIZE;
@@ -495,6 +536,13 @@ void moveGhost2(void* arg)
 
     while(1)
     {
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            break;
+        }
+        pthread_mutex_unlock(&closedMutex);
         pthread_mutex_lock(&pacmanMutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
@@ -511,6 +559,7 @@ void moveGhost2(void* arg)
         {
             while(rando == 0)
                 rando = ((rand()%2)-(rand()%2));
+            pthread_mutex_lock(&gameMapMutex);
             if(isValid(ghost2X/CELL_SIZE, ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE+(rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE+(-rando), ghost2Y/CELL_SIZE + (rando), gameMap))
                 nextMove = {0,rando};
             else if(isValid(ghost2X/CELL_SIZE , ghost2Y/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghost2X/CELL_SIZE+(rando), ghost2Y/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghost2X/CELL_SIZE+(-rando), ghost2Y/CELL_SIZE + (rando*-1), gameMap))
@@ -523,11 +572,13 @@ void moveGhost2(void* arg)
                 nextMove = {0,-rando};
             else
                 nextMove = {-direction.first,0};
+            pthread_mutex_unlock(&gameMapMutex);
         }
         else
         {
             while(rando == 0)
                 rando = ((rand()%2)-(rand()%2));
+            pthread_mutex_lock(&gameMapMutex);
             if(isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE, gameMap) && !isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE  + (rando), ghost2Y/CELL_SIZE + (-rando), gameMap))
                 nextMove = {rando,0};
             else if(isValid(ghost2X/CELL_SIZE+ (rando*-1), ghost2Y/CELL_SIZE, gameMap)&& !isValid(ghost2X/CELL_SIZE  + (-rando), ghost2Y/CELL_SIZE + (rando), gameMap) && !isValid(ghost2X/CELL_SIZE  + (-rando), ghost2Y/CELL_SIZE + (-rando), gameMap))
@@ -540,6 +591,7 @@ void moveGhost2(void* arg)
                 nextMove = {-rando,0};
             else
                 nextMove =  {0,-direction.second};
+            pthread_mutex_unlock(&gameMapMutex);
         }
         nextMoveX = (nextMove.first + ghost2X/CELL_SIZE) * CELL_SIZE;
         nextMoveY = (nextMove.second + ghost2Y/CELL_SIZE) * CELL_SIZE;
@@ -714,6 +766,12 @@ int main()
         window.draw(ghost2); // Draw the ghost
 
         window.display();
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            window.close();
+        }
+        pthread_mutex_unlock(&closedMutex);
     }
 
     // Join threads
@@ -724,6 +782,8 @@ int main()
     // Destroy mutexes
     pthread_mutex_destroy(&inputMutex);
     pthread_mutex_destroy(&pacmanMutex);
+    pthread_mutex_destroy(&gameMapMutex);
+    pthread_mutex_destroy(&closedMutex);
 
     return 0;
 }
