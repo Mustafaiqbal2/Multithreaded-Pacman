@@ -277,7 +277,7 @@ void* userInput(void* arg)
                 pthread_mutex_lock(&closedMutex);
                 closed = true;
                 pthread_mutex_unlock(&closedMutex);
-                exit(1);
+                pthread_exit(NULL);
             }
             else if (event.type == Event::KeyPressed)
             {
@@ -907,6 +907,14 @@ void moveGhost1(void* arg) { // smart movement
         {
             break;
         }
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            pthread_exit(NULL);
+
+        }
+        pthread_mutex_unlock(&closedMutex);
     }
     ///////////////////////////////////////////////////////////////////////----------------Outside
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
@@ -954,6 +962,7 @@ void moveGhost1(void* arg) { // smart movement
         ghostY = nextMove.second* CELL_SIZE;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         usleep(delay); // Sleep for 0.3 seconds
+        pthread_mutex_lock(&closedMutex);
     }
     pthread_exit(NULL);
 }
@@ -981,6 +990,13 @@ void moveGhost2(void* arg)
         bob(clock, ghost_shape,pos);
         if(tryAcquire(flag))
             break;
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            pthread_exit(NULL);
+        }
+        pthread_mutex_unlock(&closedMutex);
     }
     ///////////////////////////////////////////////////////////////////////----------------Outside
     while(1)
@@ -1350,6 +1366,8 @@ heartSprite.setPosition(10, 800);
     pthread_join(moveThread, nullptr);
     pthread_join(ghostThread, nullptr);
     pthread_join(ghostThread2, nullptr);
+    pthread_join(ghostThread3, nullptr);
+    pthread_join(ghostThread4, nullptr);
     // Destroy mutexes
     pthread_mutex_destroy(&inputMutex);
     pthread_mutex_destroy(&pacmanMutex);
