@@ -26,7 +26,6 @@ pthread_mutex_t keyMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t permitMutex = PTHREAD_MUTEX_INITIALIZER;
 //semaphore for speed boosts
 sem_t speed;
-
 // Define game entities
 // Define game grid
 int gameMap[ROWS][COLS] = {0};
@@ -38,7 +37,9 @@ bool closed = false;
 //bool flag aqcuisition
 bool acquired = true;
 //bool for speed boost
-bool speedBoost = false;
+int boosts = 2;
+bool timeOut[] = {false,false,false,false};
+priority_queue<pair<int,int>> speedQueue; // slower ghosts get more priority or else the game would be too difficult
 // Mutex to protect user input
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
 // Mutex to protect pacman position
@@ -712,57 +713,6 @@ void startWait(sf::Clock& clock, bool& flag) {
         return;
 }
 
-
-// Function for ghost movement
-void moveGhost1(void* arg) { // smart movement
-    void ** args = (void**)arg;
-    int* gN0 = (int*)args[0];
-    int gNum = *gN0;
-    int& ghostX = (gNum == 1 ? ghost1X : ghost3X);
-    int& ghostY = (gNum == 1 ? ghost1Y : ghost3Y);
-    sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
-    sf::Texture ghostTexture;
-    sf::Clock clock;
-    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
-    // bob up and down while waiting for key
-    int pos = 25;
-    bool flag = 0; // flag to know it has acquired
-    while(1)
-    {
-        bob(clock, ghost_shape,pos);
-        if(tryAcquire(flag))
-        {
-            break;
-        }
-    }
-    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
-    while(1)
-    {
-        pthread_mutex_lock(&closedMutex);
-        if(closed)
-        {
-            pthread_mutex_unlock(&closedMutex);
-            break;
-        }
-        pthread_mutex_unlock(&closedMutex);
-        pthread_mutex_lock(&pacmanMutex);
-        int pacX = pacman_x / CELL_SIZE;
-        int pacY = pacman_y / CELL_SIZE;
-        pthread_mutex_unlock(&pacmanMutex);
-
-        int diffX = pacX - ghostX / CELL_SIZE;
-        int diffY = pacY - ghostY / CELL_SIZE;
-        //change texture to look at pacman
-        changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
-
-        std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
-        ghostX = nextMove.first * CELL_SIZE;
-        ghostY = nextMove.second* CELL_SIZE;
-        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-        usleep(400000); // Sleep for 0.3 seconds
-    }
-    pthread_exit(NULL);
-}
 void changeEyes2(pair<int,int> direction, sf::Sprite* ghost_shape, sf::Texture& ghostTexture, int gNum)
 {
     std::string ghostTextureFile;
@@ -804,6 +754,129 @@ void changeEyes2(pair<int,int> direction, sf::Sprite* ghost_shape, sf::Texture& 
         break;
     }
 }
+bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
+{
+    if(!flag && !timeOut[gNum])//not already requested boost
+    {
+        cout<<"Boost Requested By: "<<gNum<<endl;
+        pthread_mutex_lock(&speedMutex);
+        speedQueue.push({priority,gNum});
+        pthread_mutex_unlock(&speedMutex);
+        flag = 1;
+        return false;
+    }
+    else if(timeOut[gNum])
+    {
+        if(clock.getElapsedTime().asSeconds() >= 10)//another 5 seconds before requesting again
+        {
+            timeOut[gNum] = false;
+            return false;
+        }
+        else if(clock.getElapsedTime().asSeconds() >= 5 && flag)//timeout boost after 5 seconds
+        {
+            cout<<"Speed boost Timed out by: "<<gNum<<endl;
+            pthread_mutex_lock(&speedMutex);
+            boosts++;
+            cout<<"Boosts remaining: "<<boosts<<endl;
+            pthread_mutex_unlock(&speedMutex);
+            flag = 0;
+            return false;
+        }
+        return true;
+    }
+    else
+    {
+        pthread_mutex_lock(&speedMutex);
+        //check if bro is top of queue
+        if(speedQueue.top().second == gNum)
+        {
+            if(boosts > 0)
+            {
+                cout<<"Speed boost Attained by: "<<gNum<<endl;
+                speedQueue.pop();
+                boosts--;
+                cout<<"Boosts remaining: "<<boosts<<endl;
+                timeOut[gNum] = true;
+                pthread_mutex_unlock(&speedMutex);
+                clock.restart();
+                return true;
+            }
+            else
+            {
+                pthread_mutex_unlock(&speedMutex);
+                return false;
+            }
+        }
+        else
+        {
+            pthread_mutex_unlock(&speedMutex);
+            return false;
+        }
+    }
+}
+// Function for ghost movement
+void moveGhost1(void* arg) { // smart movement
+    void ** args = (void**)arg;
+    int* gN0 = (int*)args[0];
+    int gNum = *gN0;
+    int& ghostX = (gNum == 1 ? ghost1X : ghost3X);
+    int& ghostY = (gNum == 1 ? ghost1Y : ghost3Y);
+    int priority = (gNum == 1 ? 1 : 0);
+    sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
+    sf::Texture ghostTexture;
+    sf::Clock clock;
+    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
+    // bob up and down while waiting for key
+    int pos = 25;
+    bool flag = 0; // flag to know it has acquired
+    bool speed = false;
+    int delay = 400000;
+    ///////////////////////////////////////////////////////////////////////----------------House
+    while(1)
+    {
+        bob(clock, ghost_shape,pos);
+        if(tryAcquire(flag))
+        {
+            break;
+        }
+    }
+    ///////////////////////////////////////////////////////////////////////----------------Outside
+    ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
+    while(1)
+    {
+        if(requestSpeedBoost(gNum,1,speed,clock))
+        {
+            delay = 200000;
+        }
+        else
+        {
+            delay = 400000;
+        }
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            break;
+        }
+        pthread_mutex_unlock(&closedMutex);
+        pthread_mutex_lock(&pacmanMutex);
+        int pacX = pacman_x / CELL_SIZE;
+        int pacY = pacman_y / CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
+
+        int diffX = pacX - ghostX / CELL_SIZE;
+        int diffY = pacY - ghostY / CELL_SIZE;
+        //change texture to look at pacman
+        changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
+
+        std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
+        ghostX = nextMove.first * CELL_SIZE;
+        ghostY = nextMove.second* CELL_SIZE;
+        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
+        usleep(delay); // Sleep for 0.3 seconds
+    }
+    pthread_exit(NULL);
+}
 void moveGhost2(void* arg) 
 { // random movement with direction persistence
     void** args = (void**)arg;
@@ -818,14 +891,28 @@ void moveGhost2(void* arg)
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     int pos = 25;
     bool flag = 0; // flag to know it has acquired
+    bool speed = false;
+    int priority = (gNum == 2 ? 2 : 3);
+    int delay = 500000;
+    ///////////////////////////////////////////////////////////////////////----------------House
+
     while(1)
     {
         bob(clock, ghost_shape,pos);
         if(tryAcquire(flag))
             break;
     }
+    ///////////////////////////////////////////////////////////////////////----------------Outside
     while(1)
     {
+        if(requestSpeedBoost(gNum,priority,speed,clock))
+        {
+            delay = 200000;
+        }
+        else
+        {
+            delay = 500000;
+        }
         pthread_mutex_lock(&closedMutex);
         if(closed)
         {
@@ -891,7 +978,7 @@ void moveGhost2(void* arg)
         ghostX = nextMoveX;
         ghostY = nextMoveY;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-        usleep(500000); // Sleep for 0.5 seconds
+        usleep(delay); // Sleep for 0.5 seconds
     }
     pthread_exit(NULL);
 }
