@@ -19,8 +19,11 @@
 using namespace std;
 using namespace sf;
 //semaphores for key and permit for ghosts
-sem_t key;
-sem_t permit;
+int key = 2;
+int permit = 2;
+int countG = 0; //for number of ghost out of ghost house
+pthread_mutex_t keyMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t permitMutex = PTHREAD_MUTEX_INITIALIZER;
 //semaphore for speed boosts
 sem_t speed;
 
@@ -30,7 +33,12 @@ int gameMap[ROWS][COLS] = {0};
 int score = 0;
 //bool afraid to check if ghost is afraid
 bool afraid = false;
+//check if game closed
 bool closed = false;
+//bool flag aqcuisition
+bool acquired = true;
+//bool for speed boost
+bool speedBoost = false;
 // Mutex to protect user input
 pthread_mutex_t inputMutex = PTHREAD_MUTEX_INITIALIZER;
 // Mutex to protect pacman position
@@ -39,6 +47,14 @@ pthread_mutex_t pacmanMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t gameMapMutex = PTHREAD_MUTEX_INITIALIZER;
 //mutex for closed
 pthread_mutex_t closedMutex = PTHREAD_MUTEX_INITIALIZER;
+//mutex for speed boost
+pthread_mutex_t speedMutex = PTHREAD_MUTEX_INITIALIZER;
+//mutex for afraid
+pthread_mutex_t afraidMutex = PTHREAD_MUTEX_INITIALIZER;
+//mutex for acquired
+pthread_mutex_t acquiredMutex = PTHREAD_MUTEX_INITIALIZER;
+//mutex for count
+pthread_mutex_t countMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Shared variable for user input
 Keyboard::Key userInputKey = Keyboard::Unknown;
@@ -574,6 +590,128 @@ void bob(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos)
         pos = -pos;
     }
 }
+//bool try aqcuisition
+bool tryAcquire(bool& flag) 
+{
+    if(flag)
+    {
+        pthread_mutex_lock(&acquiredMutex);
+        if(!acquired)
+        {
+            cout<<"Starting delayed turn"<<endl;
+            cout<<"Acquired:\t"<<acquired<<endl;
+            acquired = true;
+            pthread_mutex_lock(&countMutex);
+            countG++;
+            cout<<countG<<endl;
+            pthread_mutex_unlock(&countMutex);
+            flag = 0;
+            cout<<"returning function"<<endl;
+            cout<<"Acquired:\t"<<acquired<<endl;
+            pthread_mutex_unlock(&acquiredMutex);
+            return 1;
+        }
+        else
+        {
+            pthread_mutex_unlock(&acquiredMutex);
+            return 0;
+        }
+        pthread_mutex_unlock(&acquiredMutex);
+    }
+    pthread_mutex_lock(&keyMutex);
+    if(key>0)
+        key--;
+    else
+    {
+        pthread_mutex_unlock(&keyMutex);
+        return false;
+    }
+    pthread_mutex_unlock(&keyMutex);
+    pthread_mutex_lock(&permitMutex);
+    if(permit == 0) // permit has already been acquired release key and return false
+    {
+        pthread_mutex_unlock(&permitMutex);
+        pthread_mutex_lock(&keyMutex);
+        key++;
+        pthread_mutex_unlock(&keyMutex);
+        return false;
+    }
+    else // grab permit
+    {
+        permit--;
+        pthread_mutex_unlock(&permitMutex);
+        pthread_mutex_lock(&acquiredMutex);
+        if(acquired)
+        {
+            cout<<"Acquired but waiting"<<endl;
+            pthread_mutex_unlock(&acquiredMutex);
+            flag = 1; // flag to know it has acquired and is waiting for delayed turn;
+            return false;
+        }
+        else
+        {
+            cout<<"Acquired"<<endl;
+            acquired = true;
+            pthread_mutex_lock(&countMutex);
+            countG++;
+            pthread_mutex_unlock(&countMutex);
+            pthread_mutex_unlock(&acquiredMutex);
+            return true;
+        }
+        pthread_mutex_unlock(&acquiredMutex);
+        return true;
+    }
+}
+
+void resetAquired(sf::Clock& clock, bool& flag) 
+{
+    // Check if deadlock condition is reached
+    if (clock.getElapsedTime().asSeconds() >= 5 && flag == 1) 
+    {
+        pthread_mutex_lock(&acquiredMutex);
+        acquired = false; // Reset acquired state
+        pthread_mutex_unlock(&acquiredMutex);
+        clock.restart(); // Restart the clock
+    }
+    // Check if the ghost acquired both resources
+    pthread_mutex_lock(&countMutex);
+    int value = countG;
+    pthread_mutex_unlock(&countMutex);
+    if (value == 2) {
+        // Reset state and release resources
+        pthread_mutex_lock(&acquiredMutex);
+        acquired = true;
+        pthread_mutex_unlock(&acquiredMutex); // Release the lock
+        
+        cout << "Reset" << endl;
+        
+        pthread_mutex_lock(&keyMutex);
+        key = 2; // Release the keys
+        pthread_mutex_unlock(&keyMutex);
+        pthread_mutex_lock(&permitMutex);
+        permit = 2; // Release the permits
+        pthread_mutex_unlock(&permitMutex);
+        pthread_mutex_lock(&countMutex);
+        countG = 0; //reset count
+        pthread_mutex_unlock(&countMutex);
+        flag = 1;
+        clock.restart(); // Restart the clock
+    }
+}
+
+void startWait(sf::Clock& clock, bool& flag) {
+    // Check if the ghost has been waiting for too long
+    if (clock.getElapsedTime().asSeconds() >= 5 && flag == 1) {
+        pthread_mutex_lock(&acquiredMutex);
+        acquired = false; // Reset acquired state
+        pthread_mutex_unlock(&acquiredMutex);
+        flag = 0;
+        clock.restart(); // Restart the clock
+    }
+    else
+        return;
+}
+
 
 // Function for ghost movement
 void moveGhost1(void* arg) { // smart movement
@@ -588,9 +726,14 @@ void moveGhost1(void* arg) { // smart movement
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     // bob up and down while waiting for key
     int pos = 25;
+    bool flag = 0; // flag to know it has acquired
     while(1)
     {
         bob(clock, ghost_shape,pos);
+        if(tryAcquire(flag))
+        {
+            break;
+        }
     }
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     while(1)
@@ -666,7 +809,6 @@ void moveGhost2(void* arg)
     void** args = (void**)arg;
     int* gN0 = (int*)args[0];
     int gNum = *gN0;
-    cout<<gNum<<endl;
     int &ghostX = (gNum == 2 ? ghost2X : ghost4X);
     int &ghostY = (gNum == 2 ? ghost2Y : ghost4Y);
     sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
@@ -675,9 +817,12 @@ void moveGhost2(void* arg)
     sf::Clock clock;
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     int pos = 25;
+    bool flag = 0; // flag to know it has acquired
     while(1)
     {
         bob(clock, ghost_shape,pos);
+        if(tryAcquire(flag))
+            break;
     }
     while(1)
     {
@@ -751,7 +896,12 @@ void moveGhost2(void* arg)
     pthread_exit(NULL);
 }
 
-
+void resetKeys()
+{
+    pthread_mutex_lock(&inputMutex);
+    userInputKey = Keyboard::Unknown;
+    pthread_mutex_unlock(&inputMutex);
+}
 
 // Main function
 int main()
@@ -816,9 +966,6 @@ int main()
     initializeGameBoard();
     // Create SFML window for the game
     sf::RenderWindow window(sf::VideoMode(800, 900), "SFML window");
-    //2 keys and 2 permits for ghosts
-    sem_init(&key, 0, 2);
-    sem_init(&permit, 0, 2);
     //2 speed boosts
     sem_init(&speed, 0, 2);
 
@@ -935,10 +1082,15 @@ int main()
     args4[0] = &gNo4;
     args4[1] = &ghost4;
     pthread_create(&ghostThread4, nullptr, (void* (*)(void*))moveGhost2, args4);
-
+    Clock clock;
+    bool flag = 1;
+    bool flag2 = 1;
     // Main loop
     while (window.isOpen())
     {
+        //start wait for ghosts 5 seconds
+        if(flag2)
+            startWait(clock,flag2);
         // Clear, draw, and display
         window.clear();
         drawGrid(window);
@@ -951,6 +1103,9 @@ int main()
         window.draw(ghost2); // Draw the ghost
         window.draw(ghost3); // Draw the ghost
         window.draw(ghost4); // Draw the ghost
+        //check for if a ghost has aquired both key and permit
+        if(!flag2)
+            resetAquired(clock,flag);
 
         window.display();
         pthread_mutex_lock(&closedMutex);
@@ -971,6 +1126,8 @@ int main()
     pthread_mutex_destroy(&pacmanMutex);
     pthread_mutex_destroy(&gameMapMutex);
     pthread_mutex_destroy(&closedMutex);
-
+    pthread_mutex_destroy(&afraidMutex);
+    pthread_mutex_destroy(&acquiredMutex);
+    pthread_mutex_destroy(&speedMutex);
     return 0;
 }
