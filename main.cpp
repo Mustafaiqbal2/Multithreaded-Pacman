@@ -56,6 +56,34 @@ pthread_mutex_t afraidMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t acquiredMutex = PTHREAD_MUTEX_INITIALIZER;
 //mutex for count
 pthread_mutex_t countMutex = PTHREAD_MUTEX_INITIALIZER;
+/////////////////////////////////////////////////////////////////////
+//lives reset flag
+bool lives_reset = false;
+int allReset = 0;
+// Mutex for lives reset
+pthread_mutex_t livesResetMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t livesMutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Constants for initial positions
+const int INITIAL_PACMAN_X = CELL_SIZE + 25 / 8;
+const int INITIAL_PACMAN_Y = CELL_SIZE + 25 / 4;
+
+const int INITIAL_GHOST1_X = CELL_SIZE * 11;
+const int INITIAL_GHOST2_X = CELL_SIZE * 12;
+const int INITIAL_GHOST3_X = CELL_SIZE * 13;
+const int INITIAL_GHOST4_X = CELL_SIZE * 12;
+const int INITIAL_GHOST1_Y = CELL_SIZE * 11;
+const int INITIAL_GHOST2_Y = CELL_SIZE * 11;
+const int INITIAL_GHOST3_Y = CELL_SIZE * 11;
+const int INITIAL_GHOST4_Y = CELL_SIZE * 12;
+
+
+// Mutex for ghost positions
+pthread_mutex_t ghost1Mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ghost2Mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ghost3Mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ghost4Mutex = PTHREAD_MUTEX_INITIALIZER;
+////////////////////////////////////////////////////////////////////////////////////
 
 // Shared variable for user input
 Keyboard::Key userInputKey = Keyboard::Unknown;
@@ -259,6 +287,44 @@ void initializeGameBoard()
         }
     }
 }
+//lives reset function
+// Function to reset positions of Pacman and the ghosts
+void resetPositions(int gNum) {
+    switch(gNum)
+    {
+    case 0:
+        pthread_mutex_lock(&pacmanMutex);
+        pacman_x = INITIAL_PACMAN_X;
+        pacman_y = INITIAL_PACMAN_Y;
+        pthread_mutex_unlock(&pacmanMutex);
+        break;
+    case 1:
+        pthread_mutex_lock(&ghost1Mutex);
+        ghost1X = INITIAL_GHOST1_X;
+        ghost1Y = INITIAL_GHOST1_Y;
+        pthread_mutex_unlock(&ghost1Mutex);
+        break;
+    case 2:
+        pthread_mutex_lock(&ghost2Mutex);
+        ghost2X = INITIAL_GHOST2_X;
+        ghost2Y = INITIAL_GHOST2_Y;
+        pthread_mutex_unlock(&ghost2Mutex);
+        break;
+    case 3:
+        pthread_mutex_lock(&ghost3Mutex);
+        ghost3X = INITIAL_GHOST3_X;
+        ghost3Y = INITIAL_GHOST3_Y;
+        pthread_mutex_unlock(&ghost3Mutex);
+        break;
+    case 4:
+        pthread_mutex_lock(&ghost4Mutex);
+        ghost4X = INITIAL_GHOST4_X;
+        ghost4Y = INITIAL_GHOST4_Y;
+        pthread_mutex_unlock(&ghost4Mutex);
+        break;
+    }
+}
+
 
 // Function to handle user input
 void* userInput(void* arg)
@@ -353,8 +419,6 @@ void movePacman(void* arg)
         pthread_mutex_lock(&pacmanMutex);
         nextX = pacman_x + pacman_direction_x * CELL_SIZE;
         nextY = pacman_y + pacman_direction_y * CELL_SIZE;
-        pthread_mutex_unlock(&pacmanMutex);
-
         // Check if the next position is a wall
         pthread_mutex_lock(&gameMapMutex);
         bool valid = isValid(nextX / CELL_SIZE, nextY / CELL_SIZE, gameMap);
@@ -375,14 +439,13 @@ void movePacman(void* arg)
             }
         }
         // Move pacman
-        pthread_mutex_lock(&pacmanMutex);
         pacman_x += pacman_direction_x * CELL_SIZE;
         pacman_y += pacman_direction_y * CELL_SIZE;
         nextX = pacman_x;
         nextY = pacman_y;
-        pthread_mutex_unlock(&pacmanMutex);
         pacman_shape->setPosition(nextX + 25/2, nextY + 25/2); // Update pacman position
         pacman_shape->setRotation(rotation);
+        pthread_mutex_unlock(&pacmanMutex);
         pthread_mutex_lock(&gameMapMutex);
         int value = gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE];
         pthread_mutex_unlock(&gameMapMutex);
@@ -402,6 +465,14 @@ void movePacman(void* arg)
             }
         }
         usleep(180000); // Sleep for 0.3 seconds
+        pthread_mutex_lock(&livesResetMutex);
+        if(lives_reset)
+        {
+            resetPositions(0);
+            allReset++;
+            pthread_mutex_unlock(&livesResetMutex);
+        }
+        pthread_mutex_unlock(&livesResetMutex);
     }
 }
 int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS][COLS]) {
@@ -814,71 +885,33 @@ bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
         }
     }
 }
+//house wait function
+void houseWait(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos,bool& flag)
+{
+    bool reset = true;
+    while(reset)
+    {
+        pthread_mutex_lock(&livesResetMutex);
+        reset = lives_reset;
+        pthread_mutex_unlock(&livesResetMutex);
+    }
+    while(1)
+    {
+        bob(clock, ghost_shape,pos);
+        if(tryAcquire(flag))
+        {
+            break;
+        }
+        pthread_mutex_lock(&closedMutex);
+        if(closed)
+        {
+            pthread_mutex_unlock(&closedMutex);
+            pthread_exit(NULL);
 
-
-
-
-
-
-// Constants for initial positions
-const int INITIAL_PACMAN_X = 100;
-const int INITIAL_PACMAN_Y = 100;
-const int INITIAL_GHOST1_X = 200;
-const int INITIAL_GHOST1_Y = 200;
-// Define other initial positions as needed...
-
-
-// Define variables for Ghost 2
-const int INITIAL_GHOST2_X = 300;
-const int INITIAL_GHOST2_Y = 300;
-
-// Define variables for Ghost 3
-const int INITIAL_GHOST3_X = 400;
-const int INITIAL_GHOST3_Y = 400;
-
-// Define variables for Ghost 4
-const int INITIAL_GHOST4_X = 500;
-const int INITIAL_GHOST4_Y = 500;
-
-
-// Mutex for ghost positions
-pthread_mutex_t ghost1Mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t ghost2Mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t ghost3Mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t ghost4Mutex = PTHREAD_MUTEX_INITIALIZER;
-
-// Function to reset positions of Pacman and the ghosts
-void resetPositions() {
-    // Reset Pacman's position
-    pacman_x = INITIAL_PACMAN_X; // Reset Pacman's x position
-    pacman_y = INITIAL_PACMAN_Y; // Reset Pacman's y position
-
-    // Reset ghost 1's position
-    pthread_mutex_lock(&ghost1Mutex);
-    ghost1X = INITIAL_GHOST1_X; // Reset ghost 1's x position
-    ghost1Y = INITIAL_GHOST1_Y; // Reset ghost 1's y position
-    pthread_mutex_unlock(&ghost1Mutex);
-
-    // Reset ghost 2's position
-    pthread_mutex_lock(&ghost2Mutex);
-    ghost2X = INITIAL_GHOST2_X; // Reset ghost 2's x position
-    ghost2Y = INITIAL_GHOST2_Y; // Reset ghost 2's y position
-    pthread_mutex_unlock(&ghost2Mutex);
-
-    // Reset ghost 3's position
-    pthread_mutex_lock(&ghost3Mutex);
-    ghost3X = INITIAL_GHOST3_X; // Reset ghost 3's x position
-    ghost3Y = INITIAL_GHOST3_Y; // Reset ghost 3's y position
-    pthread_mutex_unlock(&ghost3Mutex);
-
-    // Reset ghost 4's position
-    pthread_mutex_lock(&ghost4Mutex);
-    ghost4X = INITIAL_GHOST4_X; // Reset ghost 4's x position
-    ghost4Y = INITIAL_GHOST4_Y; // Reset ghost 4's y position
-    pthread_mutex_unlock(&ghost4Mutex);
+        }
+        pthread_mutex_unlock(&closedMutex);
+    }
 }
-
-
 
 
 int lives=3;
@@ -900,22 +933,7 @@ void moveGhost1(void* arg) { // smart movement
     bool speed = false;
     int delay = 400000;
     ///////////////////////////////////////////////////////////////////////----------------House
-    while(1)
-    {
-        bob(clock, ghost_shape,pos);
-        if(tryAcquire(flag))
-        {
-            break;
-        }
-        pthread_mutex_lock(&closedMutex);
-        if(closed)
-        {
-            pthread_mutex_unlock(&closedMutex);
-            pthread_exit(NULL);
-
-        }
-        pthread_mutex_unlock(&closedMutex);
-    }
+    houseWait(clock, ghost_shape,pos,flag);
     ///////////////////////////////////////////////////////////////////////----------------Outside
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     while(1)
@@ -938,31 +956,52 @@ void moveGhost1(void* arg) { // smart movement
         pthread_mutex_lock(&pacmanMutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
-        pthread_mutex_unlock(&pacmanMutex);
 
         int diffX = pacX - ghostX / CELL_SIZE;
         int diffY = pacY - ghostY / CELL_SIZE;
         //change texture to look at pacman
         changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
-
-
-           if (pacX == ghostX / CELL_SIZE && pacY == ghostY / CELL_SIZE) 
-        {
-            lives--; // Decrement lives
-            std::cout << "Lives after decrement: " << lives << std::endl;
-            // Reset positions if lives are greater than 0
-            if (lives > 0) {
-                resetPositions(); // Reset positions of Pacman and the ghost
-            }
-            
-        }
-
         std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
         ghostX = nextMove.first * CELL_SIZE;
         ghostY = nextMove.second* CELL_SIZE;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
+        (gNum == 1) ? pthread_mutex_lock(&ghost1Mutex) : pthread_mutex_lock(&ghost3Mutex);
+        if (pacX == ghostX / CELL_SIZE && pacY == ghostY / CELL_SIZE) 
+        {
+            pthread_mutex_lock(&livesResetMutex);
+            if(!lives_reset)
+            {
+                pthread_mutex_lock(&livesMutex);
+                lives--; // Decrement lives
+                pthread_mutex_unlock(&livesMutex);
+            }
+            pthread_mutex_unlock(&livesResetMutex);
+            std::cout << "Lives after decrement: " << lives << std::endl;
+            // Reset positions if lives are greater than 0
+            if (lives > 0) 
+            {
+                pthread_mutex_lock(&livesResetMutex);
+                lives_reset = true;
+                pthread_mutex_unlock(&livesResetMutex);
+            }
+            
+        }
+        (gNum == 1) ? pthread_mutex_unlock(&ghost1Mutex) : pthread_mutex_unlock(&ghost3Mutex);
+        pthread_mutex_unlock(&pacmanMutex);
         usleep(delay); // Sleep for 0.3 seconds
-        pthread_mutex_lock(&closedMutex);
+        pthread_mutex_lock(&livesResetMutex);
+        if(lives_reset)
+        {
+            cout<<"Resetting"<<endl;
+            resetPositions(gNum);
+            ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
+            allReset++;
+            pthread_mutex_unlock(&livesResetMutex);
+            pos = 25;
+            houseWait(clock, ghost_shape,pos,flag);
+
+        }
+        pthread_mutex_unlock(&livesResetMutex);
     }
     pthread_exit(NULL);
 }
@@ -984,20 +1023,7 @@ void moveGhost2(void* arg)
     int priority = (gNum == 2 ? 2 : 3);
     int delay = 500000;
     ///////////////////////////////////////////////////////////////////////----------------House
-
-    while(1)
-    {
-        bob(clock, ghost_shape,pos);
-        if(tryAcquire(flag))
-            break;
-        pthread_mutex_lock(&closedMutex);
-        if(closed)
-        {
-            pthread_mutex_unlock(&closedMutex);
-            pthread_exit(NULL);
-        }
-        pthread_mutex_unlock(&closedMutex);
-    }
+    houseWait(clock, ghost_shape,pos,flag);
     ///////////////////////////////////////////////////////////////////////----------------Outside
     while(1)
     {
@@ -1074,17 +1100,39 @@ void moveGhost2(void* arg)
         ghostX = nextMoveX;
         ghostY = nextMoveY;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-
+        pthread_mutex_lock(&pacmanMutex);
+        pacX = pacman_x / CELL_SIZE;
+        pacY = pacman_y / CELL_SIZE;
+        (gNum == 2) ? pthread_mutex_lock(&ghost2Mutex) : pthread_mutex_lock(&ghost4Mutex);
         if(pacX == ghostX/CELL_SIZE && pacY == ghostY/CELL_SIZE)
         {
+            pthread_mutex_lock(&livesMutex);
             lives--; // Decrement lives
+            pthread_mutex_unlock(&livesMutex);
             std::cout << "Lives after decrement: " << lives << std::endl;
             // Reset positions if lives are greater than 0
-            if (lives > 0) {
-                resetPositions(); // Reset positions of Pacman and the ghost
+            if (lives > 0) 
+            {
+                pthread_mutex_lock(&livesResetMutex);
+                lives_reset = true;
+                pthread_mutex_unlock(&livesResetMutex);
             }
         }
+        (gNum == 2) ? pthread_mutex_unlock(&ghost2Mutex) : pthread_mutex_unlock(&ghost4Mutex);
+        pthread_mutex_unlock(&pacmanMutex);
         usleep(delay); // Sleep for 0.5 seconds
+        pthread_mutex_lock(&livesResetMutex);
+        if(lives_reset)
+        {
+            cout<<"Resetting"<<endl;
+            resetPositions(gNum);
+            ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
+            allReset++;
+            pthread_mutex_unlock(&livesResetMutex);
+            pos = 25;
+            houseWait(clock, ghost_shape,pos,flag);
+        }
+        pthread_mutex_unlock(&livesResetMutex);
     }
     pthread_exit(NULL);
 }
@@ -1095,7 +1143,53 @@ void resetKeys()
     userInputKey = Keyboard::Unknown;
     pthread_mutex_unlock(&inputMutex);
 }
-
+void restartLives(sf::Clock& clock,bool& flag)
+{
+    pthread_mutex_lock(&livesResetMutex);
+    if(allReset == 5)
+    {
+        cout<<"All Reset: "<<allReset<<endl;
+        allReset = 0;
+        clock.restart();
+        flag = 1;
+        lives_reset = false;
+        pthread_mutex_lock(&acquiredMutex);
+        acquired = true;
+        pthread_mutex_unlock(&acquiredMutex);
+    }
+    pthread_mutex_unlock(&livesResetMutex);
+}
+//draw lives
+void drawLives(sf::RenderWindow& window, sf::Sprite& heartSprite)
+{
+    pthread_mutex_lock(&livesMutex);
+    switch (lives)
+    {
+    case 3:
+        heartSprite.setPosition(10, 830);
+        
+        window.draw(heartSprite);
+        heartSprite.setPosition(40, 830);
+        window.draw(heartSprite);
+        heartSprite.setPosition(70, 830);
+        window.draw(heartSprite);
+        break;
+    case 2:
+        heartSprite.setPosition(10, 830);
+        window.draw(heartSprite);
+        heartSprite.setPosition(40, 830);
+        window.draw(heartSprite);
+        break;
+    case 1:
+        heartSprite.setPosition(10, 830);
+        window.draw(heartSprite);
+        break;
+    case 0:
+    //Handle game over logic
+        break;
+    }
+    pthread_mutex_unlock(&livesMutex);
+}
 // Main function
 int main()
 {
@@ -1279,23 +1373,23 @@ int main()
     bool flag = 1;
     bool flag2 = 1;
 
-
-
     // Load heart texture
-sf::Texture heartTexture;
-if (!heartTexture.loadFromFile("img/heart.png"))
-{
-    // Handle loading error
-    std::cerr << "Failed to load heart texture!" << std::endl;
-    return 1; // Exit the program or handle the error appropriately
-}
-// Create heart sprite
-sf::Sprite heartSprite(heartTexture);
-heartSprite.setPosition(10, 800);
+    sf::Texture heartTexture;
+    if (!heartTexture.loadFromFile("img/heart.png"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load heart texture!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+    // Create heart sprite
+    sf::Sprite heartSprite(heartTexture);
+    heartSprite.setPosition(10, 800);
 
     // Main loop
     while (window.isOpen())
     {
+        // Restart lives if all ghosts have been reset
+        restartLives(clock,flag2);
         //start wait for ghosts 5 seconds
         if(flag2)
             startWait(clock,flag2);
@@ -1311,43 +1405,7 @@ heartSprite.setPosition(10, 800);
         window.draw(ghost2); // Draw the ghost
         window.draw(ghost3); // Draw the ghost
         window.draw(ghost4); // Draw the ghost
-
-          switch (lives)
-    {
-        case 3:
-            heartSprite.setPosition(10, 830);
-            
-            window.draw(heartSprite);
-            heartSprite.setPosition(40, 830);
-            window.draw(heartSprite);
-            heartSprite.setPosition(70, 830);
-            window.draw(heartSprite);
-
-            break;
-        case 2:
-            heartSprite.setPosition(10, 830);
- 
-            window.draw(heartSprite);
-            heartSprite.setPosition(40, 830);
-            window.draw(heartSprite);
-            break;
-        case 1:
-            heartSprite.setPosition(10, 830);
-            
-            window.draw(heartSprite);
-            
-            break;
-
-
-            case 0:
-             window.close();
-                break;
-       
-    }
-
-
-
-
+        drawLives(window, heartSprite);
         //check for if a ghost has aquired both key and permit
         if(!flag2)
             resetAquired(clock,flag);
@@ -1376,5 +1434,16 @@ heartSprite.setPosition(10, 800);
     pthread_mutex_destroy(&afraidMutex);
     pthread_mutex_destroy(&acquiredMutex);
     pthread_mutex_destroy(&speedMutex);
+    pthread_mutex_destroy(&keyMutex);
+    pthread_mutex_destroy(&permitMutex);
+    pthread_mutex_destroy(&countMutex);
+    pthread_mutex_destroy(&livesResetMutex);
+    pthread_mutex_destroy(&ghost1Mutex);
+    pthread_mutex_destroy(&ghost2Mutex);
+    pthread_mutex_destroy(&ghost3Mutex);
+    pthread_mutex_destroy(&ghost4Mutex);
+    pthread_mutex_destroy(&livesMutex);
+    // Destroy semaphores
+    sem_destroy(&speed);
     return 0;
 }
