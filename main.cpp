@@ -954,6 +954,7 @@ void moveGhost1(void* arg) { // smart movement
         }
         pthread_mutex_unlock(&closedMutex);
         pthread_mutex_lock(&pacmanMutex);
+        (gNum == 1) ? pthread_mutex_lock(&ghost1Mutex) : pthread_mutex_lock(&ghost3Mutex);
         int pacX = pacman_x / CELL_SIZE;
         int pacY = pacman_y / CELL_SIZE;
 
@@ -962,11 +963,9 @@ void moveGhost1(void* arg) { // smart movement
         //change texture to look at pacman
         changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
         std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
-        ghostX = nextMove.first * CELL_SIZE;
-        ghostY = nextMove.second* CELL_SIZE;
-        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-        (gNum == 1) ? pthread_mutex_lock(&ghost1Mutex) : pthread_mutex_lock(&ghost3Mutex);
-        if (pacX == ghostX / CELL_SIZE && pacY == ghostY / CELL_SIZE) 
+        int nextX = nextMove.first * CELL_SIZE + ghostX;
+        int nextY = nextMove.second * CELL_SIZE + ghostY;
+        if ((pacX == ghostX / CELL_SIZE && pacY == ghostY / CELL_SIZE) || (nextX == ghostX && nextY == ghostY))
         {
             pthread_mutex_lock(&livesResetMutex);
             if(!lives_reset)
@@ -984,8 +983,10 @@ void moveGhost1(void* arg) { // smart movement
                 lives_reset = true;
                 pthread_mutex_unlock(&livesResetMutex);
             }
-            
         }
+        ghostX = nextMove.first * CELL_SIZE;
+        ghostY = nextMove.second* CELL_SIZE;
+        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         (gNum == 1) ? pthread_mutex_unlock(&ghost1Mutex) : pthread_mutex_unlock(&ghost3Mutex);
         pthread_mutex_unlock(&pacmanMutex);
         usleep(delay); // Sleep for 0.3 seconds
@@ -998,8 +999,8 @@ void moveGhost1(void* arg) { // smart movement
             allReset++;
             pthread_mutex_unlock(&livesResetMutex);
             pos = 25;
+            flag = 0;
             houseWait(clock, ghost_shape,pos,flag);
-
         }
         pthread_mutex_unlock(&livesResetMutex);
     }
@@ -1042,11 +1043,6 @@ void moveGhost2(void* arg)
             break;
         }
         pthread_mutex_unlock(&closedMutex);
-        pthread_mutex_lock(&pacmanMutex);
-        int pacX = pacman_x / CELL_SIZE;
-        int pacY = pacman_y / CELL_SIZE;
-        pthread_mutex_unlock(&pacmanMutex);
-
         int nextMoveX;
         int nextMoveY;
 
@@ -1092,23 +1088,25 @@ void moveGhost2(void* arg)
                 nextMove =  {0,-direction.second};
             pthread_mutex_unlock(&gameMapMutex);
         }
+        pthread_mutex_lock(&pacmanMutex);
+        int pacX = pacman_x / CELL_SIZE;
+        int pacY = pacman_y / CELL_SIZE;
+        (gNum == 2) ? pthread_mutex_lock(&ghost2Mutex) : pthread_mutex_lock(&ghost4Mutex);
         nextMoveX = (nextMove.first + ghostX/CELL_SIZE) * CELL_SIZE;
         nextMoveY = (nextMove.second + ghostY/CELL_SIZE) * CELL_SIZE;
         direction = nextMove;
         //change texture to look at forward
         changeEyes2(direction,ghost_shape,ghostTexture,gNum);
-        ghostX = nextMoveX;
-        ghostY = nextMoveY;
-        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-        pthread_mutex_lock(&pacmanMutex);
-        pacX = pacman_x / CELL_SIZE;
-        pacY = pacman_y / CELL_SIZE;
-        (gNum == 2) ? pthread_mutex_lock(&ghost2Mutex) : pthread_mutex_lock(&ghost4Mutex);
-        if(pacX == ghostX/CELL_SIZE && pacY == ghostY/CELL_SIZE)
+        if((pacX == ghostX/CELL_SIZE && pacY == ghostY/CELL_SIZE) || (pacX == nextMoveX/CELL_SIZE && pacY == nextMoveY/CELL_SIZE))
         {
-            pthread_mutex_lock(&livesMutex);
-            lives--; // Decrement lives
-            pthread_mutex_unlock(&livesMutex);
+            pthread_mutex_lock(&livesResetMutex);
+            if(!lives_reset)
+            {
+                pthread_mutex_lock(&livesMutex);
+                lives--; // Decrement lives
+                pthread_mutex_unlock(&livesMutex);
+            }
+            pthread_mutex_unlock(&livesResetMutex);
             std::cout << "Lives after decrement: " << lives << std::endl;
             // Reset positions if lives are greater than 0
             if (lives > 0) 
@@ -1118,6 +1116,9 @@ void moveGhost2(void* arg)
                 pthread_mutex_unlock(&livesResetMutex);
             }
         }
+        ghostX = nextMoveX;
+        ghostY = nextMoveY;
+        ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         (gNum == 2) ? pthread_mutex_unlock(&ghost2Mutex) : pthread_mutex_unlock(&ghost4Mutex);
         pthread_mutex_unlock(&pacmanMutex);
         usleep(delay); // Sleep for 0.5 seconds
@@ -1130,6 +1131,7 @@ void moveGhost2(void* arg)
             allReset++;
             pthread_mutex_unlock(&livesResetMutex);
             pos = 25;
+            flag = 0;
             houseWait(clock, ghost_shape,pos,flag);
         }
         pthread_mutex_unlock(&livesResetMutex);
