@@ -1269,7 +1269,9 @@ int main()
     }
     sf::Sprite pacman_shape(pacmanTexture);
     pacman_shape.setOrigin(25/2, 25/2);
+    pthread_mutex_lock(&pacmanMutex);
     pacman_shape.setPosition(pacman_x, pacman_y);
+    pthread_mutex_unlock(&pacmanMutex);
 
     // Ghost Sprite
     sf::Texture ghostTexture1;
@@ -1396,7 +1398,6 @@ int main()
         // Clear, draw, and display
         window.clear();
         drawGrid(window);
-        window.draw(pacman_shape);                     // Draw the player (yellow circle)
 
         // Update and display score
         scoreText.setString("Score: " + std::to_string(score));
@@ -1405,6 +1406,7 @@ int main()
         window.draw(ghost2); // Draw the ghost
         window.draw(ghost3); // Draw the ghost
         window.draw(ghost4); // Draw the ghost
+        window.draw(pacman_shape);                     // Draw the player (yellow circle)
         drawLives(window, heartSprite);
         //check for if a ghost has aquired both key and permit
         if(!flag2)
