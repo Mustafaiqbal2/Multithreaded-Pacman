@@ -814,6 +814,74 @@ bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
         }
     }
 }
+
+
+
+
+
+
+// Constants for initial positions
+const int INITIAL_PACMAN_X = 100;
+const int INITIAL_PACMAN_Y = 100;
+const int INITIAL_GHOST1_X = 200;
+const int INITIAL_GHOST1_Y = 200;
+// Define other initial positions as needed...
+
+
+// Define variables for Ghost 2
+const int INITIAL_GHOST2_X = 300;
+const int INITIAL_GHOST2_Y = 300;
+
+// Define variables for Ghost 3
+const int INITIAL_GHOST3_X = 400;
+const int INITIAL_GHOST3_Y = 400;
+
+// Define variables for Ghost 4
+const int INITIAL_GHOST4_X = 500;
+const int INITIAL_GHOST4_Y = 500;
+
+
+// Mutex for ghost positions
+pthread_mutex_t ghost1Mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ghost2Mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ghost3Mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ghost4Mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Function to reset positions of Pacman and the ghosts
+void resetPositions() {
+    // Reset Pacman's position
+    pacman_x = INITIAL_PACMAN_X; // Reset Pacman's x position
+    pacman_y = INITIAL_PACMAN_Y; // Reset Pacman's y position
+
+    // Reset ghost 1's position
+    pthread_mutex_lock(&ghost1Mutex);
+    ghost1X = INITIAL_GHOST1_X; // Reset ghost 1's x position
+    ghost1Y = INITIAL_GHOST1_Y; // Reset ghost 1's y position
+    pthread_mutex_unlock(&ghost1Mutex);
+
+    // Reset ghost 2's position
+    pthread_mutex_lock(&ghost2Mutex);
+    ghost2X = INITIAL_GHOST2_X; // Reset ghost 2's x position
+    ghost2Y = INITIAL_GHOST2_Y; // Reset ghost 2's y position
+    pthread_mutex_unlock(&ghost2Mutex);
+
+    // Reset ghost 3's position
+    pthread_mutex_lock(&ghost3Mutex);
+    ghost3X = INITIAL_GHOST3_X; // Reset ghost 3's x position
+    ghost3Y = INITIAL_GHOST3_Y; // Reset ghost 3's y position
+    pthread_mutex_unlock(&ghost3Mutex);
+
+    // Reset ghost 4's position
+    pthread_mutex_lock(&ghost4Mutex);
+    ghost4X = INITIAL_GHOST4_X; // Reset ghost 4's x position
+    ghost4Y = INITIAL_GHOST4_Y; // Reset ghost 4's y position
+    pthread_mutex_unlock(&ghost4Mutex);
+}
+
+
+
+
+int lives=3;
 // Function for ghost movement
 void moveGhost1(void* arg) { // smart movement
     void ** args = (void**)arg;
@@ -868,6 +936,18 @@ void moveGhost1(void* arg) { // smart movement
         int diffY = pacY - ghostY / CELL_SIZE;
         //change texture to look at pacman
         changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
+
+
+           if (pacX == ghostX / CELL_SIZE && pacY == ghostY / CELL_SIZE) 
+        {
+            lives--; // Decrement lives
+            std::cout << "Lives after decrement: " << lives << std::endl;
+            // Reset positions if lives are greater than 0
+            if (lives > 0) {
+                resetPositions(); // Reset positions of Pacman and the ghost
+            }
+            
+        }
 
         std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
         ghostX = nextMove.first * CELL_SIZE;
@@ -978,6 +1058,16 @@ void moveGhost2(void* arg)
         ghostX = nextMoveX;
         ghostY = nextMoveY;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
+
+        if(pacX == ghostX/CELL_SIZE && pacY == ghostY/CELL_SIZE)
+        {
+            lives--; // Decrement lives
+            std::cout << "Lives after decrement: " << lives << std::endl;
+            // Reset positions if lives are greater than 0
+            if (lives > 0) {
+                resetPositions(); // Reset positions of Pacman and the ghost
+            }
+        }
         usleep(delay); // Sleep for 0.5 seconds
     }
     pthread_exit(NULL);
@@ -1172,6 +1262,21 @@ int main()
     Clock clock;
     bool flag = 1;
     bool flag2 = 1;
+
+
+
+    // Load heart texture
+sf::Texture heartTexture;
+if (!heartTexture.loadFromFile("img/heart.png"))
+{
+    // Handle loading error
+    std::cerr << "Failed to load heart texture!" << std::endl;
+    return 1; // Exit the program or handle the error appropriately
+}
+// Create heart sprite
+sf::Sprite heartSprite(heartTexture);
+heartSprite.setPosition(10, 800);
+
     // Main loop
     while (window.isOpen())
     {
@@ -1190,6 +1295,43 @@ int main()
         window.draw(ghost2); // Draw the ghost
         window.draw(ghost3); // Draw the ghost
         window.draw(ghost4); // Draw the ghost
+
+          switch (lives)
+    {
+        case 3:
+            heartSprite.setPosition(10, 830);
+            
+            window.draw(heartSprite);
+            heartSprite.setPosition(40, 830);
+            window.draw(heartSprite);
+            heartSprite.setPosition(70, 830);
+            window.draw(heartSprite);
+
+            break;
+        case 2:
+            heartSprite.setPosition(10, 830);
+ 
+            window.draw(heartSprite);
+            heartSprite.setPosition(40, 830);
+            window.draw(heartSprite);
+            break;
+        case 1:
+            heartSprite.setPosition(10, 830);
+            
+            window.draw(heartSprite);
+            
+            break;
+
+
+            case 0:
+             window.close();
+                break;
+       
+    }
+
+
+
+
         //check for if a ghost has aquired both key and permit
         if(!flag2)
             resetAquired(clock,flag);
