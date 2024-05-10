@@ -60,6 +60,8 @@ pthread_mutex_t countMutex = PTHREAD_MUTEX_INITIALIZER;
 //lives reset flag
 bool lives_reset = false;
 int allReset = 0;
+
+int currentLevel=1;
 // Mutex for lives reset
 pthread_mutex_t livesResetMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t livesMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -100,6 +102,10 @@ int ghost1Y = CELL_SIZE * 11;
 int ghost2Y = CELL_SIZE * 11;
 int ghost3Y = CELL_SIZE * 11;
 int ghost4Y = CELL_SIZE * 12;
+
+
+
+
 // Function to check if a cell is valid
 bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
     return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
@@ -475,6 +481,31 @@ void movePacman(void* arg)
         pthread_mutex_unlock(&livesResetMutex);
     }
 }
+
+
+void handleLevelChange() {
+    bool levelComplete = true;
+    
+    for (int i = 0; i < ROWS; i++) {
+        for (int j = 0; j < COLS; j++) {
+            if (gameMap[i][j] == 2 || gameMap[i][j] == 3) {
+                levelComplete = false;
+                break;
+            }
+        }
+        if (!levelComplete) {
+            break;
+        }
+    }
+    if (levelComplete) {
+        currentLevel++;  // Increment the level counter
+        cout<<"level "<<currentLevel<<endl;
+        initializeGameBoard();  // Reset the game board for the next level
+        resetPositions(0);  // Reset Pac-Man position
+        // Add any other necessary logic for level change here
+    }
+}
+
 int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS][COLS]) {
     bool visited[ROWS][COLS] = {false};
     std::queue<std::pair<int, int>> q;
@@ -549,6 +580,10 @@ std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY
 
     return nextMove[minIndex].first;
 }
+
+
+
+
 //Ghost Eyes 1
 void changeEyes(Texture& ghostTexture,Sprite* ghost_shape, int diffX, int diffY,int gNum)
 {
@@ -1410,6 +1445,18 @@ int main()
         window.draw(ghost4); // Draw the ghost
         window.draw(pacman_shape);                     // Draw the player (yellow circle)
         drawLives(window, heartSprite);
+            sf::Text levelText;
+        levelText.setFont(font);
+        levelText.setCharacterSize(24);
+        levelText.setFillColor(sf::Color::White);
+        levelText.setString("Level: " + std::to_string(currentLevel));
+        levelText.setPosition(300, 850);
+        window.draw(levelText);
+
+
+        // Check for level change
+        handleLevelChange();
+
         //check for if a ghost has aquired both key and permit
         if(!flag2)
             resetAquired(clock,flag);
