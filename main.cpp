@@ -8,6 +8,9 @@
 #include <SFML/Window.hpp>
 #include <unistd.h>
 #include <queue>
+#include <utility>
+#include <vector>
+#include <cmath>
 #include <stack>
 #include <climits>
 
@@ -67,17 +70,17 @@ pthread_mutex_t livesResetMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t livesMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Constants for initial positions
-const int INITIAL_PACMAN_X = CELL_SIZE + 25 / 8;
-const int INITIAL_PACMAN_Y = CELL_SIZE + 25 / 4;
+const float INITIAL_PACMAN_X = CELL_SIZE + 25 / 8.0;
+const float INITIAL_PACMAN_Y = CELL_SIZE + 25 / 4.0;
 
-const int INITIAL_GHOST1_X = CELL_SIZE * 11;
-const int INITIAL_GHOST2_X = CELL_SIZE * 12;
-const int INITIAL_GHOST3_X = CELL_SIZE * 13;
-const int INITIAL_GHOST4_X = CELL_SIZE * 12;
-const int INITIAL_GHOST1_Y = CELL_SIZE * 11;
-const int INITIAL_GHOST2_Y = CELL_SIZE * 11;
-const int INITIAL_GHOST3_Y = CELL_SIZE * 11;
-const int INITIAL_GHOST4_Y = CELL_SIZE * 12;
+const float INITIAL_GHOST1_X = CELL_SIZE * 11;
+const float INITIAL_GHOST2_X = CELL_SIZE * 12;
+const float INITIAL_GHOST3_X = CELL_SIZE * 13;
+const float INITIAL_GHOST4_X = CELL_SIZE * 12;
+const float INITIAL_GHOST1_Y = CELL_SIZE * 11;
+const float INITIAL_GHOST2_Y = CELL_SIZE * 11;
+const float INITIAL_GHOST3_Y = CELL_SIZE * 11;
+const float INITIAL_GHOST4_Y = CELL_SIZE * 12;
 
 
 // Mutex for ghost positions
@@ -91,23 +94,9 @@ pthread_mutex_t ghost4Mutex = PTHREAD_MUTEX_INITIALIZER;
 Keyboard::Key userInputKey = Keyboard::Unknown;
 
 //pacman coordinates
-float pacman_x = CELL_SIZE + 25 / 8;
-float pacman_y = CELL_SIZE + 25 / 4;
+float pacman_x = CELL_SIZE + 25 / 8.0;
+float pacman_y = CELL_SIZE + 25 / 4.0;
 //ghost coordinates
-<<<<<<< HEAD
-int ghost1X = CELL_SIZE * 11;
-int ghost2X = CELL_SIZE * 12;
-int ghost3X = CELL_SIZE * 13;
-int ghost4X = CELL_SIZE * 12;
-int ghost1Y = CELL_SIZE * 11;
-int ghost2Y = CELL_SIZE * 11;
-int ghost3Y = CELL_SIZE * 11;
-int ghost4Y = CELL_SIZE * 12;
-
-
-
-
-=======
 float ghost1X = CELL_SIZE * 11;
 float ghost2X = CELL_SIZE * 12;
 float ghost3X = CELL_SIZE * 13;
@@ -116,10 +105,48 @@ float ghost1Y = CELL_SIZE * 11;
 float ghost2Y = CELL_SIZE * 11;
 float ghost3Y = CELL_SIZE * 11;
 float ghost4Y = CELL_SIZE * 12;
->>>>>>> 718ef79 (--)
 // Function to check if a cell is valid
-bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
-    return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
+bool isValid(float x, float y, int gameMap[ROWS][COLS]) {
+    int x_int = int(x);
+    int y_int = int(y);
+    return (x_int >= 0 && x_int < ROWS && y_int >= 0 && y_int < COLS &&
+            gameMap[y_int][x_int] != -2 && gameMap[y_int][x_int] != 1 && gameMap[y_int][x_int] != -1);
+}
+
+bool isValidP(float x, float y, int gameMap[ROWS][COLS],int direction,int d2) {
+    if(direction == 0)
+    {
+        if((y != ((25/4.0)/CELL_SIZE) + (int)y ))
+        {
+            return 0;
+        }
+        else
+        {
+            x=x-((25/8.0)/CELL_SIZE);
+            y=y-((25/4.0)/CELL_SIZE);
+            if(d2 == 1)
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+            else
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)floor(x)] != -2 && gameMap[(int)ceil(y)][(int)floor(x)] != 1 && gameMap[(int)ceil(y)][(int)floor(x)] != -1);
+        }
+
+    }
+    else
+    {
+        if((x != ((25/8.0)/CELL_SIZE) + (int)x)) 
+        {
+            return 0;
+        }
+        else 
+        {
+            x=x-((25/8.0)/CELL_SIZE);
+            y=y-((25/4.0)/CELL_SIZE);
+            if(d2 == 1)
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+            else
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)floor(y)][(int)ceil(x)] != -2 && gameMap[(int)floor(y)][(int)ceil(x)] != 1 && gameMap[(int)floor(y)][(int)ceil(x)] != -1);
+        }
+    }
 }
 // Function to draw the grid with appropriate shapes for pellets, power-ups, and walls
 void drawGrid(sf::RenderWindow& window)
@@ -432,17 +459,17 @@ void movePacman(void* arg)
         pthread_mutex_unlock(&inputMutex);
 
         // Calculate the next position
-        int nextX, nextY;
+        float nextX, nextY;
         pthread_mutex_lock(&pacmanMutex);
-        nextX = pacman_x + pacman_direction_x * CELL_SIZE;
-        nextY = pacman_y + pacman_direction_y * CELL_SIZE;
+        nextX = pacman_x + pacman_direction_x;
+        nextY = pacman_y + pacman_direction_y;
         // Check if the next position is a wall
+        int d2 = (pacman_direction_x == 0 ? pacman_direction_y : pacman_direction_x);
         pthread_mutex_lock(&gameMapMutex);
-        bool valid = isValid(nextX / CELL_SIZE, nextY / CELL_SIZE, gameMap);
+        bool valid = isValidP(nextX / CELL_SIZE, nextY / CELL_SIZE, gameMap,(pacman_direction_x == 0 ? 1 : 0),d2);
         pthread_mutex_unlock(&gameMapMutex);
         if (!valid)
         {
-            // If it is a wall, do not update the position
             rotation = prevRotation;
             if(prevX == pacman_direction_x && prevY == pacman_direction_y)
             {
@@ -456,38 +483,39 @@ void movePacman(void* arg)
             }
         }
         // Move pacman
-        pacman_x += pacman_direction_x * CELL_SIZE;
-        pacman_y += pacman_direction_y * CELL_SIZE;
+        pacman_x += pacman_direction_x;
+        pacman_y += pacman_direction_y;
         nextX = pacman_x;
         nextY = pacman_y;
         pacman_shape->setPosition(nextX + 25/2, nextY + 25/2); // Update pacman position
         pacman_shape->setRotation(rotation);
         pthread_mutex_unlock(&pacmanMutex);
         pthread_mutex_lock(&gameMapMutex);
-        int value = gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE];
+        int value = gameMap[(int)nextY / CELL_SIZE][(int)nextX / CELL_SIZE];
         pthread_mutex_unlock(&gameMapMutex);
         if ( value == 2 || value == 3)
         {
             // Handle scoring when encountering red (2) or white (3) balls
             pthread_mutex_lock(&gameMapMutex);
-            int ballValue = gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE];
+            int ballValue = gameMap[(int)nextY / CELL_SIZE][(int)nextX / CELL_SIZE];
             pthread_mutex_unlock(&gameMapMutex);
             if (ballValue != 0)
             { // Check if the ball hasn't been consumed already
                 score += ballValue;
                 // Update the game grid to mark the ball as consumed
                 pthread_mutex_lock(&gameMapMutex);
-                gameMap[nextY / CELL_SIZE][nextX / CELL_SIZE] = 0;
+                gameMap[(int)nextY / CELL_SIZE][(int)nextX / CELL_SIZE] = 0;
                 pthread_mutex_unlock(&gameMapMutex);
             }
         }
-        usleep(180000); // Sleep for 0.3 seconds
+        usleep(6000); // Sleep for 0.3 seconds
         pthread_mutex_lock(&livesResetMutex);
         if(lives_reset)
         {
             resetPositions(0);
             allReset++;
             pthread_mutex_unlock(&livesResetMutex);
+            continue;
         }
         pthread_mutex_unlock(&livesResetMutex);
     }
@@ -496,7 +524,7 @@ void movePacman(void* arg)
 
 void handleLevelChange() {
     bool levelComplete = true;
-    
+    pthread_mutex_lock(&gameMapMutex);
     for (int i = 0; i < ROWS; i++) {
         for (int j = 0; j < COLS; j++) {
             if (gameMap[i][j] == 2 || gameMap[i][j] == 3) {
@@ -508,6 +536,7 @@ void handleLevelChange() {
             break;
         }
     }
+    pthread_mutex_unlock(&gameMapMutex);
     if (levelComplete) {
         currentLevel++;  // Increment the level counter
         cout<<"level "<<currentLevel<<endl;
@@ -517,11 +546,11 @@ void handleLevelChange() {
     }
 }
 
-int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS][COLS]) {
+int shortestPath(float startX, float startY, float destX, float destY, int gameMap[ROWS][COLS]) {
     bool visited[ROWS][COLS] = {false};
     std::queue<std::pair<int, int>> q;
     q.push({startX, startY});
-    visited[startX][startY] = true;
+    visited[(int)startX][(int)startY] = true;
 
     int dx[] = {0, 0, 1, -1};
     int dy[] = {1, -1, 0, 0};
@@ -533,7 +562,7 @@ int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS]
         q.pop();
 
         // Check if destination is reached
-        if (x == destX && y == destY) {
+        if (round(x) == round(destX) && round(y) == round(destY)) {
             return dist[x][y];
         }
 
@@ -543,6 +572,8 @@ int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS]
             int newY = y + dy[i];
 
             // Check validity and unvisited status
+            int d2 = (dx[i] == 0 ? dy[i] : dx[i]);
+            int direction = (dx[i] == 0 ? 1 : 0);
             pthread_mutex_lock(&gameMapMutex);
             bool valid = isValid(newX, newY, gameMap);
             pthread_mutex_unlock(&gameMapMutex);
@@ -557,17 +588,18 @@ int shortestPath(int startX, int startY, int destX, int destY, int gameMap[ROWS]
     // If destination is unreachable
     return INT_MAX;
 }
-std::pair<int, int> findNextMove(int gameMap[ROWS][COLS], int ghostX, int ghostY, int pacmanX, int pacmanY) {
+std::pair<float, float> findNextMove(int gameMap[ROWS][COLS], float ghostX, float ghostY, float pacmanX, float pacmanY) {
 
     int dx[] = {0, 0, 1, -1};
     int dy[] = {1, -1, 0, 0};
-
-    std::pair<std::pair<int, int>, int> nextMove[4];
+    std::pair<std::pair<float, float>, int> nextMove[4];
 
     for (int i = 0; i < 4; i++) {
         int x = ghostX + dx[i];
         int y = ghostY + dy[i];
         nextMove[i] = {{-1, -1}, INT_MAX};
+        int d2 = (dx[i] == 0 ? dy[i] : dx[i]);
+        int direction = (dx[i] == 0 ? 1 : 0);
         pthread_mutex_lock(&gameMapMutex);
         bool valid = isValid(x, y, gameMap);
         pthread_mutex_unlock(&gameMapMutex);
@@ -941,6 +973,7 @@ void houseWait(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos,bool& flag)
         reset = lives_reset;
         pthread_mutex_unlock(&livesResetMutex);
     }
+    cout<<"Waiting"<<endl;
     while(1)
     {
         bob(clock, ghost_shape,pos);
@@ -977,7 +1010,7 @@ void moveGhost1(void* arg) { // smart movement
     int pos = 25;
     bool flag = 0; // flag to know it has acquired
     bool speed = false;
-    int delay = 400000;
+    int delay = 6000;
     ///////////////////////////////////////////////////////////////////////----------------House
     houseWait(clock, ghost_shape,pos,flag);
     ///////////////////////////////////////////////////////////////////////----------------Outside
@@ -986,11 +1019,11 @@ void moveGhost1(void* arg) { // smart movement
     {
         if(requestSpeedBoost(gNum,1,speed,clock))
         {
-            delay = 200000;
+            delay = 3000;
         }
         else
         {
-            delay = 400000;
+            delay = 6000;
         }
         pthread_mutex_lock(&closedMutex);
         if(closed)
@@ -1000,18 +1033,18 @@ void moveGhost1(void* arg) { // smart movement
         }
         pthread_mutex_unlock(&closedMutex);
         pthread_mutex_lock(&pacmanMutex);
+        float pacX = pacman_x / CELL_SIZE;
+        float pacY = pacman_y / CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
         (gNum == 1) ? pthread_mutex_lock(&ghost1Mutex) : pthread_mutex_lock(&ghost3Mutex);
-        int pacX = pacman_x / CELL_SIZE;
-        int pacY = pacman_y / CELL_SIZE;
-
         int diffX = pacX - ghostX / CELL_SIZE;
         int diffY = pacY - ghostY / CELL_SIZE;
         //change texture to look at pacman
         changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
-        std::pair<int, int> nextMove = findNextMove(gameMap, ghostX / CELL_SIZE, ghostY / CELL_SIZE, pacX, pacY);
-        int nextX = nextMove.first * CELL_SIZE + ghostX;
-        int nextY = nextMove.second * CELL_SIZE + ghostY;
-        if ((pacX == ghostX / CELL_SIZE && pacY == ghostY / CELL_SIZE) || (nextX == ghostX && nextY == ghostY))
+        std::pair<int, int> nextMove = findNextMove(gameMap, (ghostX / CELL_SIZE), (ghostY / CELL_SIZE), pacX, pacY);
+        float nextX = nextMove.first ;
+        float nextY = nextMove.second;
+        if ((round(pacX) == round(ghostX / CELL_SIZE) && round(pacY == ghostY / CELL_SIZE)) || (round(nextX) == round(pacX) && round(nextY) == round(pacY)))
         {
             pthread_mutex_lock(&livesResetMutex);
             if(!lives_reset)
@@ -1021,7 +1054,6 @@ void moveGhost1(void* arg) { // smart movement
                 pthread_mutex_unlock(&livesMutex);
             }
             pthread_mutex_unlock(&livesResetMutex);
-            std::cout << "Lives after decrement: " << lives << std::endl;
             // Reset positions if lives are greater than 0
             if (lives > 0) 
             {
@@ -1030,11 +1062,12 @@ void moveGhost1(void* arg) { // smart movement
                 pthread_mutex_unlock(&livesResetMutex);
             }
         }
-        ghostX = nextMove.first * CELL_SIZE;
-        ghostY = nextMove.second* CELL_SIZE;
+        cout<<"Ghost next"<<gNum<<" "<<nextX<<" "<<nextY<<endl;
+        cout<<"Ghost curr"<<gNum<<" "<<ghostX/CELL_SIZE<<" "<<ghostY/CELL_SIZE<<endl;
+        ghostX = (ceil(nextX) > (ghostX/CELL_SIZE)) ? ghostX + 1 : (ceil(nextX) < (ghostX/CELL_SIZE)) ? ghostX - 1 : ghostX;
+        ghostY = (ceil(nextY) > (ghostY/CELL_SIZE)) ? ghostY + 1 : (ceil(nextY) < (ghostY/CELL_SIZE)) ? ghostY - 1 : ghostY;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         (gNum == 1) ? pthread_mutex_unlock(&ghost1Mutex) : pthread_mutex_unlock(&ghost3Mutex);
-        pthread_mutex_unlock(&pacmanMutex);
         usleep(delay); // Sleep for 0.3 seconds
         pthread_mutex_lock(&livesResetMutex);
         if(lives_reset)
@@ -1047,10 +1080,48 @@ void moveGhost1(void* arg) { // smart movement
             pos = 25;
             flag = 0;
             houseWait(clock, ghost_shape,pos,flag);
+            continue;
         }
         pthread_mutex_unlock(&livesResetMutex);
     }
     pthread_exit(NULL);
+}
+bool isValidG2(float x, float y, int gameMap[ROWS][COLS],int direction,int d2,int d3 = 0)
+{
+    if(direction == 0)//moving horizontally
+    {
+        if(y - (int)y != 0)
+            return false;
+        else
+        {
+            if(d2 == 1)
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)floor(x)] != -2 && gameMap[(int)ceil(y)][(int)floor(x)] != 1 && gameMap[(int)ceil(y)][(int)floor(x)] != -1);
+            else
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+        }
+    }
+    else if(direction == 1)//moving vertically
+    {
+        if((x - (int)x) != 0) 
+            return 0;
+        else 
+        {
+            if(d2 == 1)
+            {
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)floor(y)][(int)ceil(x)] != -2 && gameMap[(int)floor(y)][(int)ceil(x)] != 1 && gameMap[(int)floor(y)][(int)ceil(x)] != -1);
+            }
+            else
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+        }
+    }
+    else
+    {
+        if((x - (int)x) != 0) 
+            return 1;
+        if((y - (int)y) != 0) 
+            return 1;
+        return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+    }
 }
 void moveGhost2(void* arg) 
 { // random movement with direction persistence
@@ -1061,14 +1132,14 @@ void moveGhost2(void* arg)
     float& ghostY = (gNum == 2 ? ghost2Y : ghost4Y);
     sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
     sf::Texture ghostTexture;
-    pair<int,int> direction =  {1,0}; // Random initial direction
+    pair<int,int> direction =  {0,-1}; // Random initial direction
     sf::Clock clock;
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     int pos = 25;
     bool flag = 0; // flag to know it has acquired
     bool speed = false;
     int priority = (gNum == 2 ? 2 : 3);
-    int delay = 500000;
+    int delay = 10000;
     ///////////////////////////////////////////////////////////////////////----------------House
     houseWait(clock, ghost_shape,pos,flag);
     ///////////////////////////////////////////////////////////////////////----------------Outside
@@ -1076,11 +1147,11 @@ void moveGhost2(void* arg)
     {
         if(requestSpeedBoost(gNum,priority,speed,clock))
         {
-            delay = 200000;
+            delay = 5000;
         }
         else
         {
-            delay = 500000;
+            delay = 8000;
         }
         pthread_mutex_lock(&closedMutex);
         if(closed)
@@ -1089,30 +1160,29 @@ void moveGhost2(void* arg)
             break;
         }
         pthread_mutex_unlock(&closedMutex);
-        int nextMoveX;
-        int nextMoveY;
+        float nextMoveX;
+        float nextMoveY;
 
         std::pair<int, int> nextMove = {0, 0};
         //find if any turns
-
         int rando = ((rand()%2)-(rand()%2));
         if(abs(direction.first) == 1)
         {
             while(rando == 0)
                 rando = ((rand()%2)-(rand()%2));
             pthread_mutex_lock(&gameMapMutex);
-            if(isValid(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE+(rando), ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE+(-rando), ghostY/CELL_SIZE + (rando), gameMap))
+            if(isValidG2(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando), gameMap,0,(rando)) && !isValidG2(ghostX/CELL_SIZE+(rando), ghostY/CELL_SIZE + (rando), gameMap,-1,rando,rando) && !isValidG2(ghostX/CELL_SIZE+(-rando), ghostY/CELL_SIZE + (rando), gameMap,-1,-rando,rando))
                 nextMove = {0,rando};
-            else if(isValid(ghostX/CELL_SIZE , ghostY/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghostX/CELL_SIZE+(rando), ghostY/CELL_SIZE + (rando*-1), gameMap) && !isValid(ghostX/CELL_SIZE+(-rando), ghostY/CELL_SIZE + (rando*-1), gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando*-1), gameMap,1,(-rando)) && !isValidG2(ghostX/CELL_SIZE+(rando), ghostY/CELL_SIZE + (rando*-1), gameMap,-1,rando,-rando) && !isValidG2(ghostX/CELL_SIZE+(-rando), ghostY/CELL_SIZE + (rando*-1), gameMap,-1,-rando,rando))
                 nextMove = {0,-rando};
-            else if(isValid(ghostX/CELL_SIZE + direction.first, ghostY/CELL_SIZE, gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE + direction.first, ghostY/CELL_SIZE, gameMap,0,direction.first))
                 nextMove = {direction.first,0};
-            else if(isValid(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando), gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (rando), gameMap,1,rando))
                 nextMove = {0,rando};
-            else if(isValid(ghostX/CELL_SIZE , ghostY/CELL_SIZE + (rando*-1), gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE, ghostY/CELL_SIZE + (-rando), gameMap,1,-rando))
                 nextMove = {0,-rando};
             else
-                nextMove = {-direction.first,0};
+                nextMove =  {-direction.first,0};
             pthread_mutex_unlock(&gameMapMutex);
         }
         else
@@ -1120,30 +1190,31 @@ void moveGhost2(void* arg)
             while(rando == 0)
                 rando = ((rand()%2)-(rand()%2));
             pthread_mutex_lock(&gameMapMutex);
-            if(isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE, gameMap) && !isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE + (-rando), gameMap))
+            if(isValidG2(ghostX/CELL_SIZE + (rando), ghostY/CELL_SIZE, gameMap,0,rando) && !isValidG2(ghostX/CELL_SIZE + (rando), ghostY/CELL_SIZE + (rando), gameMap,-1,rando,rando) && !isValidG2(ghostX/CELL_SIZE + (rando), ghostY/CELL_SIZE + (-rando), gameMap,-1,rando,-rando))
                 nextMove = {rando,0};
-            else if(isValid(ghostX/CELL_SIZE+ (rando*-1), ghostY/CELL_SIZE, gameMap)&& !isValid(ghostX/CELL_SIZE  + (-rando), ghostY/CELL_SIZE + (rando), gameMap) && !isValid(ghostX/CELL_SIZE  + (-rando), ghostY/CELL_SIZE + (-rando), gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE + (rando*-1), ghostY/CELL_SIZE, gameMap,0,(-rando)) && !isValidG2(ghostX/CELL_SIZE + (rando*-1), ghostY/CELL_SIZE + (rando), gameMap,-1,-rando,rando) && !isValidG2(ghostX/CELL_SIZE + (rando*-1), ghostY/CELL_SIZE + (-rando), gameMap,-1,-rando,-rando))
                 nextMove = {-rando,0};
-            else if(isValid(ghostX/CELL_SIZE, ghostY/CELL_SIZE  + direction.second, gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE, ghostY/CELL_SIZE + direction.second, gameMap,1,direction.second))
                 nextMove = {0,direction.second};
-            else if(isValid(ghostX/CELL_SIZE  + (rando), ghostY/CELL_SIZE, gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE + (rando), ghostY/CELL_SIZE, gameMap,0,rando))
                 nextMove = {rando,0};
-            else if(isValid(ghostX/CELL_SIZE+ (rando*-1), ghostY/CELL_SIZE, gameMap))
+            else if(isValidG2(ghostX/CELL_SIZE + (-rando), ghostY/CELL_SIZE, gameMap,0,-rando))
                 nextMove = {-rando,0};
             else
                 nextMove =  {0,-direction.second};
             pthread_mutex_unlock(&gameMapMutex);
         }
         pthread_mutex_lock(&pacmanMutex);
-        int pacX = pacman_x / CELL_SIZE;
-        int pacY = pacman_y / CELL_SIZE;
+        float pacX = pacman_x / CELL_SIZE;
+        float pacY = pacman_y / CELL_SIZE;
+        pthread_mutex_unlock(&pacmanMutex);
         (gNum == 2) ? pthread_mutex_lock(&ghost2Mutex) : pthread_mutex_lock(&ghost4Mutex);
-        nextMoveX = (nextMove.first + ghostX/CELL_SIZE) * CELL_SIZE;
-        nextMoveY = (nextMove.second + ghostY/CELL_SIZE) * CELL_SIZE;
+        nextMoveX = (nextMove.first + ghostX) ;
+        nextMoveY = (nextMove.second + ghostY);
         direction = nextMove;
         //change texture to look at forward
         changeEyes2(direction,ghost_shape,ghostTexture,gNum);
-        if((pacX == ghostX/CELL_SIZE && pacY == ghostY/CELL_SIZE) || (pacX == nextMoveX/CELL_SIZE && pacY == nextMoveY/CELL_SIZE))
+        if((round(pacX) == round(ghostX/CELL_SIZE) && round(pacY) == round(ghostY/CELL_SIZE)) || (round(pacX) == round(nextMoveX/CELL_SIZE) && round(pacY) == (nextMoveY/CELL_SIZE)))
         {
             pthread_mutex_lock(&livesResetMutex);
             if(!lives_reset)
@@ -1153,8 +1224,6 @@ void moveGhost2(void* arg)
                 pthread_mutex_unlock(&livesMutex);
             }
             pthread_mutex_unlock(&livesResetMutex);
-            std::cout << "Lives after decrement: " << lives << std::endl;
-            // Reset positions if lives are greater than 0
             if (lives > 0) 
             {
                 pthread_mutex_lock(&livesResetMutex);
@@ -1166,7 +1235,6 @@ void moveGhost2(void* arg)
         ghostY = nextMoveY;
         ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
         (gNum == 2) ? pthread_mutex_unlock(&ghost2Mutex) : pthread_mutex_unlock(&ghost4Mutex);
-        pthread_mutex_unlock(&pacmanMutex);
         usleep(delay); // Sleep for 0.5 seconds
         pthread_mutex_lock(&livesResetMutex);
         if(lives_reset)
@@ -1179,6 +1247,7 @@ void moveGhost2(void* arg)
             pos = 25;
             flag = 0;
             houseWait(clock, ghost_shape,pos,flag);
+            continue;
         }
         pthread_mutex_unlock(&livesResetMutex);
     }
@@ -1194,9 +1263,9 @@ void resetKeys()
 void restartLives(sf::Clock& clock,bool& flag)
 {
     pthread_mutex_lock(&livesResetMutex);
-    if(allReset == 5)
+    pthread_mutex_lock(&countMutex);
+    if(allReset >= countG + 1)
     {
-        cout<<"All Reset: "<<allReset<<endl;
         allReset = 0;
         clock.restart();
         flag = 1;
@@ -1205,6 +1274,7 @@ void restartLives(sf::Clock& clock,bool& flag)
         acquired = true;
         pthread_mutex_unlock(&acquiredMutex);
     }
+    pthread_mutex_unlock(&countMutex);
     pthread_mutex_unlock(&livesResetMutex);
 }
 //draw lives
@@ -1247,17 +1317,17 @@ int main()
     // Create SFML window for menu
     sf::RenderWindow menuWindow(sf::VideoMode(800, 800), "Menu");
 
-    // Load menu background texture from a PNG file
+    // Load menu backgceil texture from a PNG file
     sf::Texture menuTexture;
     if (!menuTexture.loadFromFile("img/menu.png"))
     {
         // Handle loading error
-        std::cerr << "Failed to load menu background texture!" << std::endl;
+        std::cerr << "Failed to load menu backgceil texture!" << std::endl;
         return 1; // Exit the program or handle the error appropriately
     }
 
-    // Create menu background sprite
-    sf::Sprite menuBackground(menuTexture);
+    // Create menu backgceil sprite
+    sf::Sprite menuBackgceil(menuTexture);
 
     // Load font for menu text
     sf::Font menuFont;
@@ -1285,10 +1355,10 @@ int main()
 
         menuWindow.clear();
 
-        // Draw menu background first
-        menuWindow.draw(menuBackground);
+        // Draw menu backgceil first
+        menuWindow.draw(menuBackgceil);
 
-        // Draw menu text on top of the background
+        // Draw menu text on top of the backgceil
         menuWindow.draw(menuText);
 
         menuWindow.display();
