@@ -413,6 +413,13 @@ void* userInput(void* arg)
             }
             else if (event.type == Event::KeyPressed)
             {
+                if(event.key.code == Keyboard::Escape)
+                {
+                    pthread_mutex_lock(&closedMutex);
+                    closed = true;
+                    pthread_mutex_unlock(&closedMutex);
+                    pthread_exit(NULL);
+                }
                 // Lock mutex before accessing shared variable
                 pthread_mutex_lock(&inputMutex);
                 userInputKey = event.key.code;
@@ -1586,7 +1593,10 @@ int main()
         while (menuWindow.pollEvent(event))
         {
             if (event.type == sf::Event::Closed)
+            {
                 menuWindow.close();
+                return 0;
+            }
             else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Enter)
                 menuWindow.close();
         }
