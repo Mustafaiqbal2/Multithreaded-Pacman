@@ -1838,7 +1838,24 @@ int main()
         window.draw(levelText);
         // Check for level change
         handleLevelChange();
+           bool gameOverDisplayed = false;
 
+  if (!gameOverDisplayed && lives <= 0)
+        {
+            sf::Text gameOverText;
+            gameOverText.setFont(font);
+            gameOverText.setCharacterSize(64);
+            gameOverText.setFillColor(sf::Color::Red);
+            gameOverText.setString("Game Over");
+            gameOverText.setPosition(200, 400);
+            window.draw(gameOverText);
+            window.display(); // Ensure the text is displayed before sleep
+
+            // Add a 2-second delay
+            sleep(2);
+
+            gameOverDisplayed = true; // Set the flag to true after displaying the text and waiting
+        }
         //check for if a ghost has aquired both key and permit
         if(!flag2)
             resetAquired(clock,flag);
