@@ -13,6 +13,7 @@
 #include <cmath>
 #include <stack>
 #include <climits>
+#include <fstream>
 
 // Define game board size
 #define ROWS 25
@@ -37,6 +38,7 @@ int score = 0;
 bool afraid = false;
 //check if game closed
 bool closed = false;
+bool signalClosed = false;
 //bool flag aqcuisition
 bool acquired = true;
 //bool for speed boost
@@ -400,6 +402,14 @@ void* userInput(void* arg)
     while (window->isOpen())
     {
         Event event;
+        pthread_mutex_lock(&closedMutex);
+        if(signalClosed)
+        {
+                closed = true;
+                pthread_mutex_unlock(&closedMutex);
+                pthread_exit(NULL);
+        }
+        pthread_mutex_unlock(&closedMutex);
         // Process SFML events
         while (window->pollEvent(event))
         {
@@ -1266,6 +1276,12 @@ void moveGhost1(void* arg) { // smart movement
                     lives_reset = true;
                     pthread_mutex_unlock(&livesResetMutex);
                 }
+                else
+                {
+                    pthread_mutex_lock(&closedMutex);
+                    closed = true;
+                    pthread_mutex_unlock(&closedMutex);
+                }
             }
         }
         float prevX = ghostX;
@@ -1424,6 +1440,12 @@ void moveGhost2(void* arg)
                     lives_reset = true;
                     pthread_mutex_unlock(&livesResetMutex);
                 }
+                else
+                {
+                    pthread_mutex_lock(&closedMutex);
+                    closed = true;
+                    pthread_mutex_unlock(&closedMutex);
+                }
             }
             ghostX = nextMoveX;
             ghostY = nextMoveY;
@@ -1552,6 +1574,23 @@ void drawLives(sf::RenderWindow& window, sf::Sprite& heartSprite)
         break;
     }
     pthread_mutex_unlock(&livesMutex);
+}
+//save highscore
+void saveHighScore()
+{
+    pthread_mutex_lock(&scoreMutex);
+    int scoreLocal = score;
+    pthread_mutex_unlock(&scoreMutex);
+    std::ifstream file("highscore.txt");
+    int highscore;
+    file >> highscore;
+    file.close();
+    if (scoreLocal > highscore)
+    {
+        std::ofstream file("highscore.txt");
+        file << scoreLocal;
+        file.close();
+    }
 }
 // Main function
 int main()
@@ -1697,6 +1736,24 @@ int main()
     scoreText.setCharacterSize(32);
     scoreText.setFillColor(sf::Color::White);
     scoreText.setPosition(10, 850);
+    //level text
+    sf::Text levelText;
+    levelText.setFont(font);
+    levelText.setCharacterSize(24);
+    levelText.setFillColor(sf::Color::White);
+    levelText.setPosition(300, 850);
+    //highscore text
+    sf::Text highscoreText;
+    highscoreText.setFont(font);
+    highscoreText.setCharacterSize(24);
+    highscoreText.setFillColor(sf::Color::White);
+    highscoreText.setPosition(500, 850);
+    //get highscore
+    std::ifstream file("highscore.txt");
+    int highscore;
+    file >> highscore;
+    file.close();
+    highscoreText.setString("Highscore: " + std::to_string(highscore));
     //placeholder for multiple arguments
     // Create thread for user input
     pthread_t userInputThread;
@@ -1764,7 +1821,8 @@ int main()
         // Clear, draw, and display
         window.clear();
         drawGrid(window);
-
+        // Update and display level
+        levelText.setString("Level: " + std::to_string(currentLevel));
         // Update and display score
         pthread_mutex_lock(&scoreMutex);
         scoreText.setString("Score: " + std::to_string(score));
@@ -1776,15 +1834,8 @@ int main()
         window.draw(ghost4); // Draw the ghost
         window.draw(pacman_shape);                     // Draw the player (yellow circle)
         drawLives(window, heartSprite);
-            sf::Text levelText;
-        levelText.setFont(font);
-        levelText.setCharacterSize(24);
-        levelText.setFillColor(sf::Color::White);
-        levelText.setString("Level: " + std::to_string(currentLevel));
-        levelText.setPosition(300, 850);
+        window.draw(highscoreText);
         window.draw(levelText);
-
-
         // Check for level change
         handleLevelChange();
 
@@ -1800,7 +1851,8 @@ int main()
         }
         pthread_mutex_unlock(&closedMutex);
     }
-
+    // Save highscore
+    saveHighScore();
     // Join threads
     pthread_join(userInputThread, nullptr);
     pthread_join(moveThread, nullptr);
