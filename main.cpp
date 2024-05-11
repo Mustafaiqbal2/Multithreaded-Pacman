@@ -597,7 +597,43 @@ void handleLevelChange() {
         // Add any other necessary logic for level change here
     }
 }
-
+bool isValidG2(float x, float y, int gameMap[ROWS][COLS],int direction,int d2,int d3 = 0)
+{
+    if(direction == 0)//moving horizontally
+    {
+        if(y - (int)y != 0)
+            return false;
+        else
+        {
+            if(d2 == 1)
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)floor(x)] != -2 && gameMap[(int)ceil(y)][(int)floor(x)] != 1 && gameMap[(int)ceil(y)][(int)floor(x)] != -1);
+            else
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+        }
+    }
+    else if(direction == 1)//moving vertically
+    {
+        if((x - (int)x) != 0) 
+            return 0;
+        else 
+        {
+            if(d2 == 1)
+            {
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)floor(y)][(int)ceil(x)] != -2 && gameMap[(int)floor(y)][(int)ceil(x)] != 1 && gameMap[(int)floor(y)][(int)ceil(x)] != -1);
+            }
+            else
+                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+        }
+    }
+    else
+    {
+        if((x - (int)x) != 0) 
+            return 1;
+        if((y - (int)y) != 0) 
+            return 1;
+        return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
+    }
+}
 int shortestPath(float startX, float startY, float destX, float destY, int gameMap[ROWS][COLS]) {
     bool visited[ROWS][COLS] = {false};
     std::queue<std::pair<int, int>> q;
@@ -640,18 +676,57 @@ int shortestPath(float startX, float startY, float destX, float destY, int gameM
     // If destination is unreachable
     return INT_MAX;
 }
-std::pair<float, float> findNextMove(int gameMap[ROWS][COLS], float ghostX, float ghostY, float pacmanX, float pacmanY) {
-
+std::pair<float, float> findNextMove(int gameMap[ROWS][COLS], float ghostX, float ghostY, float pacmanX, float pacmanY) 
+{
     int dx[] = {0, 0, 1, -1};
     int dy[] = {1, -1, 0, 0};
+    float tempghostX,tempghostY;
     std::pair<std::pair<float, float>, int> nextMove[4];
-
-    for (int i = 0; i < 4; i++) {
-        int x = ghostX + dx[i];
-        int y = ghostY + dy[i];
+    for(int i=0;i<4;i++)
+    {
         nextMove[i] = {{-1, -1}, INT_MAX};
+    }
+    for (int i = 0; i < 4; i++) {
+        int dir = (dx[i] == 0 ? 1 : 0);
         int d2 = (dx[i] == 0 ? dy[i] : dx[i]);
-        int direction = (dx[i] == 0 ? 1 : 0);
+        tempghostX = ghostX;
+        tempghostY = ghostY;
+        if(ghostX - (int)ghostX !=0 && i <= 1)
+            continue;
+        if(ghostY - (int)ghostY !=0 && i > 1)
+        {
+            continue;
+        }
+        if(dir == 0)//moving horizontal
+        {
+            if(d2 == 1)//moving right
+            {
+                tempghostY = round(ghostY);
+                tempghostX = floor(ghostX);
+            }
+            else
+            {
+                tempghostY = round(ghostY);
+                tempghostX = ceil(ghostX);
+            }
+        }
+        else
+        {
+            if(d2 == 1)//moving down
+            {
+                tempghostX = round(ghostX);
+                tempghostY = floor(ghostY);
+            }
+            else
+            {
+                tempghostX = round(ghostX);
+                tempghostY = ceil(ghostY);
+            }
+        }
+
+        int x = tempghostX + dx[i];
+        int y = tempghostY + dy[i];
+        nextMove[i] = {{-1, -1}, INT_MAX};
         pthread_mutex_lock(&gameMapMutex);
         bool valid = isValid(x, y, gameMap);
         pthread_mutex_unlock(&gameMapMutex);
@@ -672,7 +747,6 @@ std::pair<float, float> findNextMove(int gameMap[ROWS][COLS], float ghostX, floa
             minIndex = i;
         }
     }
-
     return nextMove[minIndex].first;
 }
 //Ghost Eyes 1
@@ -1074,7 +1148,7 @@ void moveGhost1(void* arg) { // smart movement
     houseWait(clock, ghost_shape,pos,flag);
     ///////////////////////////////////////////////////////////////////////----------------Outside
     pthread_mutex_lock(&afraidMutex);
-    if(!afraid)
+    if(afraid)
         timeFlag1 = true;
     else
         timeFlag1 = false;
@@ -1115,9 +1189,9 @@ void moveGhost1(void* arg) { // smart movement
         {
             pacPoint = findFurthestPoint(pacX,pacY);
             nextMove = findNextMove(gameMap, (ghostX / CELL_SIZE), (ghostY / CELL_SIZE), pacPoint.first, pacPoint.second);
-            if(!timeFlag1)
+            if(timeFlag1)
             {
-                timeFlag1 = true;
+                timeFlag1 = false;
                 ghostTexture.loadFromFile("img/a.png");
                 ghost_shape->setTexture(ghostTexture);
                 ghost_shape->setScale(1.7,1.7);
@@ -1148,7 +1222,7 @@ void moveGhost1(void* arg) { // smart movement
                 flag = 0;
                 houseWait(clock, ghost_shape,pos,flag);
                 pthread_mutex_lock(&afraidMutex);
-                if(!afraid)
+                if(afraid)
                     timeFlag1 = true;
                 else
                     timeFlag1 = false;
@@ -1160,11 +1234,11 @@ void moveGhost1(void* arg) { // smart movement
         {
             changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
             nextMove = findNextMove(gameMap, (ghostX / CELL_SIZE), (ghostY / CELL_SIZE), pacX, pacY);
-            if(timeFlag1)
+            if(!timeFlag1)
             {
                 ghost_shape->setScale(1,1);
                 offset = {25/8,25/4};
-                timeFlag1 = false;
+                timeFlag1 = true;
             }
             nextX = nextMove.first;
             nextY = nextMove.second;
@@ -1187,8 +1261,12 @@ void moveGhost1(void* arg) { // smart movement
                 }
             }
         }
+        float prevX = ghostX;
+        float prevY = ghostY;
+        //make sure ghost moves only one cell
         ghostX = (ceil(nextX) > (ghostX/CELL_SIZE)) ? ghostX + 1 : (ceil(nextX) < (ghostX/CELL_SIZE)) ? ghostX - 1 : ghostX;
         ghostY = (ceil(nextY) > (ghostY/CELL_SIZE)) ? ghostY + 1 : (ceil(nextY) < (ghostY/CELL_SIZE)) ? ghostY - 1 : ghostY;
+
         ghost_shape->setPosition(ghostX + offset.first, ghostY + offset.second);
         (gNum == 1) ? pthread_mutex_unlock(&ghost1Mutex) : pthread_mutex_unlock(&ghost3Mutex);
         usleep(delay); // Sleep for 0.3 seconds
@@ -1204,7 +1282,7 @@ void moveGhost1(void* arg) { // smart movement
             flag = 0;
             houseWait(clock, ghost_shape,pos,flag);
             pthread_mutex_lock(&afraidMutex);
-            if(!afraid)
+            if(afraid)
                 timeFlag1 = true;
             else
                 timeFlag1 = false;
@@ -1214,43 +1292,6 @@ void moveGhost1(void* arg) { // smart movement
         pthread_mutex_unlock(&livesResetMutex);
     }
     pthread_exit(NULL);
-}
-bool isValidG2(float x, float y, int gameMap[ROWS][COLS],int direction,int d2,int d3 = 0)
-{
-    if(direction == 0)//moving horizontally
-    {
-        if(y - (int)y != 0)
-            return false;
-        else
-        {
-            if(d2 == 1)
-                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)floor(x)] != -2 && gameMap[(int)ceil(y)][(int)floor(x)] != 1 && gameMap[(int)ceil(y)][(int)floor(x)] != -1);
-            else
-                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
-        }
-    }
-    else if(direction == 1)//moving vertically
-    {
-        if((x - (int)x) != 0) 
-            return 0;
-        else 
-        {
-            if(d2 == 1)
-            {
-                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)floor(y)][(int)ceil(x)] != -2 && gameMap[(int)floor(y)][(int)ceil(x)] != 1 && gameMap[(int)floor(y)][(int)ceil(x)] != -1);
-            }
-            else
-                return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
-        }
-    }
-    else
-    {
-        if((x - (int)x) != 0) 
-            return 1;
-        if((y - (int)y) != 0) 
-            return 1;
-        return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[(int)ceil(y)][(int)ceil(x)] != -2 && gameMap[(int)ceil(y)][(int)ceil(x)] != 1 && gameMap[(int)ceil(y)][(int)ceil(x)] != -1);
-    }
 }
 void moveGhost2(void* arg) 
 { // random movement with direction persistence
@@ -1275,7 +1316,7 @@ void moveGhost2(void* arg)
     houseWait(clock, ghost_shape,pos,flag);
     ///////////////////////////////////////////////////////////////////////----------------Outside
     pthread_mutex_lock(&afraidMutex);
-    if(!afraid)
+    if(afraid)
         timeFlag1 = true;
     else
         timeFlag1 = false;
@@ -1413,7 +1454,7 @@ void moveGhost2(void* arg)
                 flag = 0;
                 houseWait(clock, ghost_shape,pos,flag);
                 pthread_mutex_lock(&afraidMutex);
-                if(!afraid)
+                if(afraid)
                     timeFlag1 = true;
                 else
                     timeFlag1 = false;
@@ -1439,7 +1480,7 @@ void moveGhost2(void* arg)
             flag = 0;
             houseWait(clock, ghost_shape,pos,flag);
             pthread_mutex_lock(&afraidMutex);
-            if(!afraid)
+            if(afraid)
                 timeFlag1 = true;
             else
                 timeFlag1 = false;
