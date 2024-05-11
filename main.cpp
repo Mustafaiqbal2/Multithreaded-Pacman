@@ -91,9 +91,10 @@ pthread_mutex_t ghost4Mutex = PTHREAD_MUTEX_INITIALIZER;
 Keyboard::Key userInputKey = Keyboard::Unknown;
 
 //pacman coordinates
-int pacman_x = CELL_SIZE + 25 / 8;
-int pacman_y = CELL_SIZE + 25 / 4;
+float pacman_x = CELL_SIZE + 25 / 8;
+float pacman_y = CELL_SIZE + 25 / 4;
 //ghost coordinates
+<<<<<<< HEAD
 int ghost1X = CELL_SIZE * 11;
 int ghost2X = CELL_SIZE * 12;
 int ghost3X = CELL_SIZE * 13;
@@ -106,6 +107,16 @@ int ghost4Y = CELL_SIZE * 12;
 
 
 
+=======
+float ghost1X = CELL_SIZE * 11;
+float ghost2X = CELL_SIZE * 12;
+float ghost3X = CELL_SIZE * 13;
+float ghost4X = CELL_SIZE * 12;
+float ghost1Y = CELL_SIZE * 11;
+float ghost2Y = CELL_SIZE * 11;
+float ghost3Y = CELL_SIZE * 11;
+float ghost4Y = CELL_SIZE * 12;
+>>>>>>> 718ef79 (--)
 // Function to check if a cell is valid
 bool isValid(int x, int y, int gameMap[ROWS][COLS]) {
     return (x >= 0 && x < ROWS && y >= 0 && y < COLS && gameMap[y][x] != -2 && gameMap[y][x] != 1 && gameMap[y][x] != -1);
@@ -955,8 +966,8 @@ void moveGhost1(void* arg) { // smart movement
     void ** args = (void**)arg;
     int* gN0 = (int*)args[0];
     int gNum = *gN0;
-    int& ghostX = (gNum == 1 ? ghost1X : ghost3X);
-    int& ghostY = (gNum == 1 ? ghost1Y : ghost3Y);
+    float& ghostX = (gNum == 1 ? ghost1X : ghost3X);
+    float& ghostY = (gNum == 1 ? ghost1Y : ghost3Y);
     int priority = (gNum == 1 ? 1 : 0);
     sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
     sf::Texture ghostTexture;
@@ -1046,8 +1057,8 @@ void moveGhost2(void* arg)
     void** args = (void**)arg;
     int* gN0 = (int*)args[0];
     int gNum = *gN0;
-    int &ghostX = (gNum == 2 ? ghost2X : ghost4X);
-    int &ghostY = (gNum == 2 ? ghost2Y : ghost4Y);
+    float& ghostX = (gNum == 2 ? ghost2X : ghost4X);
+    float& ghostY = (gNum == 2 ? ghost2Y : ghost4Y);
     sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
     sf::Texture ghostTexture;
     pair<int,int> direction =  {1,0}; // Random initial direction
