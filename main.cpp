@@ -14,7 +14,7 @@
 #include <stack>
 #include <climits>
 #include <fstream>
-
+#include<SFML/Audio.hpp>
 // Define game board size
 #define ROWS 25
 #define COLS 25
@@ -1609,6 +1609,9 @@ int main()
         std::cerr << "Failed to load menu backgceil texture!" << std::endl;
         return 1; // Exit the program or handle the error appropriately
     }
+      Music m;
+    m.openFromFile("sound/Medieval-Times.ogg");
+    m.play();
 
     // Create menu backgceil sprite
     sf::Sprite menuBackgceil(menuTexture);
