@@ -1560,6 +1560,7 @@ void drawLives(sf::RenderWindow& window, sf::Sprite& heartSprite)
         window.draw(heartSprite);
         break;
     case 2:
+    
         heartSprite.setPosition(10, 830);
         window.draw(heartSprite);
         heartSprite.setPosition(40, 830);
@@ -1646,6 +1647,18 @@ int main()
     }
     music.play();
 
+    sf::SoundBuffer scoreSoundBuffer;
+sf::Sound scoreSound;
+  if (!scoreSoundBuffer.loadFromFile("sound/laser.ogg"))
+    {
+        // Handle loading error
+        std::cerr << "Failed to load score increase sound file!" << std::endl;
+        return 1; // Exit the program or handle the error appropriately
+    }
+
+    // Set the sound buffer for scoreSound
+    scoreSound.setBuffer(scoreSoundBuffer);
+
     bool showInstructionImage = false;
     sf::Texture instructionTexture;
 
@@ -1683,6 +1696,7 @@ int main()
                     if (isMusicPlaying)
                     {
                         music.stop(); // Turn off the music
+                       
                         isMusicPlaying = false;
                         musicText.setString("Music: Off");
                     }
@@ -1899,6 +1913,7 @@ int main()
         // Update and display score
         pthread_mutex_lock(&scoreMutex);
         scoreText.setString("Score: " + std::to_string(score));
+         
         pthread_mutex_unlock(&scoreMutex);
         window.draw(scoreText);
         window.draw(ghost1); // Draw the ghost
@@ -1920,6 +1935,7 @@ int main()
             gameOverText.setCharacterSize(64);
             gameOverText.setFillColor(sf::Color::Red);
             gameOverText.setString("Game Over");
+             scoreSound.play();
             gameOverText.setPosition(200, 400);
             window.draw(gameOverText);
             window.display(); // Ensure the text is displayed before sleep
