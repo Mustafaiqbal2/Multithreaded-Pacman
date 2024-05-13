@@ -1592,43 +1592,65 @@ void saveHighScore()
         file.close();
     }
 }
+
 // Main function
 int main()
 {
     // Initialize random seed
     srand(time(nullptr));
 
-    // Create SFML window for menu
-    sf::RenderWindow menuWindow(sf::VideoMode(800, 800), "Menu");
+     sf::RenderWindow menuWindow(sf::VideoMode(800, 600), "Menu");
 
-    // Load menu backgceil texture from a PNG file
     sf::Texture menuTexture;
     if (!menuTexture.loadFromFile("img/menu.png"))
     {
-        // Handle loading error
-        std::cerr << "Failed to load menu backgceil texture!" << std::endl;
-        return 1; // Exit the program or handle the error appropriately
+        std::cerr << "Failed to load menu background texture!" << std::endl;
+        return 1;
     }
-      Music m;
-    m.openFromFile("sound/Medieval-Times.ogg");
-    m.play();
 
-    // Create menu backgceil sprite
-    sf::Sprite menuBackgceil(menuTexture);
+    sf::Sprite menuBackground(menuTexture);
 
-    // Load font for menu text
     sf::Font menuFont;
-    menuFont.loadFromFile("font/pixelmix.ttf"); // Change the file path as needed
+    if (!menuFont.loadFromFile("font/pixelmix.ttf"))
+    {
+        std::cerr << "Failed to load menu font!" << std::endl;
+        return 1;
+    }
 
-    // Create menu text
-    sf::Text menuText;
-    menuText.setFont(menuFont);
-    menuText.setCharacterSize(32);
-    menuText.setFillColor(sf::Color::White);
-    menuText.setString("Press Enter to Start");
-    menuText.setPosition(280, 300);
+    sf::Text playText;
+    playText.setFont(menuFont);
+    playText.setCharacterSize(32);
+    playText.setFillColor(sf::Color::Red);
+    playText.setString("Play");
+    playText.setPosition(250, 190); // Adjust position as needed
 
-    // Menu loop
+    sf::Text instructionText;
+    instructionText.setFont(menuFont);
+    instructionText.setCharacterSize(32);
+    instructionText.setFillColor(sf::Color::Red);
+    instructionText.setString("Instructions");
+    instructionText.setPosition(250, 250); // Adjust position as needed
+
+    sf::Text musicText;
+    musicText.setFont(menuFont);
+    musicText.setCharacterSize(32);
+    musicText.setFillColor(sf::Color::Red);
+    musicText.setString("Music: On"); // Initially set to "On"
+    musicText.setPosition(250, 310); // Adjust position as needed
+
+    sf::Music music;
+    if (!music.openFromFile("sound/Medieval-Times.ogg"))
+    {
+        std::cerr << "Failed to load music file!" << std::endl;
+        return 1;
+    }
+    music.play();
+
+    bool showInstructionImage = false;
+    sf::Texture instructionTexture;
+
+    bool isMusicPlaying = true; // Variable to track music state
+
     while (menuWindow.isOpen())
     {
         sf::Event event;
@@ -1639,20 +1661,68 @@ int main()
                 menuWindow.close();
                 return 0;
             }
-            else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Enter)
-                menuWindow.close();
+            else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left)
+            {
+                sf::Vector2f mousePos = menuWindow.mapPixelToCoords(sf::Mouse::getPosition(menuWindow));
+                if (playText.getGlobalBounds().contains(mousePos))
+                {
+                    menuWindow.close();
+                    // Add code here to start your game or perform other actions
+                }
+                else if (instructionText.getGlobalBounds().contains(mousePos))
+                {
+                    if (!instructionTexture.loadFromFile("img/instruction.png"))
+                    {
+                        std::cerr << "Failed to load instruction texture!" << std::endl;
+                        return 1;
+                    }
+                    showInstructionImage = true;
+                }
+                else if (musicText.getGlobalBounds().contains(mousePos))
+                {
+                    if (isMusicPlaying)
+                    {
+                        music.stop(); // Turn off the music
+                        isMusicPlaying = false;
+                        musicText.setString("Music: Off");
+                    }
+                    else
+                    {
+                        music.play(); // Turn on the music
+                        isMusicPlaying = true;
+                        musicText.setString("Music: On");
+                    }
+                }
+            }
+            else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
+            {
+                // Check if currently showing instructions
+                if (showInstructionImage)
+                {
+                    showInstructionImage = false;
+                    instructionTexture = sf::Texture(); // Clear the texture
+                }
+            }
         }
 
         menuWindow.clear();
+        menuWindow.draw(menuBackground);
+        menuWindow.draw(playText);
+        menuWindow.draw(instructionText);
+        menuWindow.draw(musicText);
 
-        // Draw menu backgceil first
-        menuWindow.draw(menuBackgceil);
-
-        // Draw menu text on top of the backgceil
-        menuWindow.draw(menuText);
+        if (showInstructionImage)
+        {
+            sf::Sprite instructionImage(instructionTexture);
+            instructionImage.setScale(800.f / instructionImage.getLocalBounds().width, 600.f / instructionImage.getLocalBounds().height);
+            instructionImage.setPosition(0, 0); // Set position to top-left corner
+            menuWindow.draw(instructionImage);
+        }
 
         menuWindow.display();
     }
+
+
 
     // Close menu and start game
     menuWindow.close();
@@ -1901,3 +1971,4 @@ int main()
     sem_destroy(&speed);
     return 0;
 }
+

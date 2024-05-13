@@ -48,6 +48,7 @@
         "streambuf": "cpp",
         "typeinfo": "cpp",
         "fstream": "cpp",
-        "climits": "cpp"
+        "climits": "cpp",
+        "set": "cpp"
     }
 }
