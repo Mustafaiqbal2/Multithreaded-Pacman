@@ -71,6 +71,7 @@ int allReset = 0;
 int lives=3;
 //current level
 int currentLevel=1;
+pthread_mutex_t levelMutex = PTHREAD_MUTEX_INITIALIZER;
 // Mutex for lives reset
 pthread_mutex_t livesResetMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t livesMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -554,7 +555,9 @@ void movePacman(void* arg)
             if (ballValue != 0)
             { // Check if the ball hasn't been consumed already
                 pthread_mutex_lock(&scoreMutex);
-                score += ballValue;
+                pthread_mutex_lock(&levelMutex);
+                score += ballValue * currentLevel;
+                pthread_mutex_unlock(&levelMutex);
                 pthread_mutex_unlock(&scoreMutex);
                 // Update the game grid to mark the ball as consumed
                 pthread_mutex_lock(&gameMapMutex);
@@ -625,7 +628,9 @@ void handleLevelChange()
     }
     pthread_mutex_unlock(&gameMapMutex);
     if (levelComplete) {
+        pthread_mutex_lock(&levelMutex);
         currentLevel++;  // Increment the level counter
+        pthread_mutex_unlock(&levelMutex);
         //cout<<"level "<<currentLevel<<endl;
         initializeGameBoard();  // Reset the game board for the next level
         resetPositions(0);  // Reset Pac-Man position
@@ -1256,7 +1261,9 @@ void moveGhost1(void* arg) { // smart movement
             {
                 (gNum == 1) ? pthread_mutex_unlock(&ghost1Mutex) : pthread_mutex_unlock(&ghost3Mutex);
                 pthread_mutex_lock(&scoreMutex);
-                score += 200; // Increment score
+                pthread_mutex_lock(&levelMutex);
+                score += 200 * currentLevel; // Increment score
+                pthread_mutex_unlock(&levelMutex);
                 pthread_mutex_unlock(&scoreMutex);
                 resetPositions(gNum);
                 pthread_mutex_lock(&soundMutex);
@@ -1571,7 +1578,9 @@ void moveGhost2(void* arg)
                 (gNum == 2) ? pthread_mutex_unlock(&ghost2Mutex) : pthread_mutex_unlock(&ghost4Mutex);
                 resetPositions(gNum);
                 pthread_mutex_lock(&scoreMutex);
-                score += 200; // Increment score
+                pthread_mutex_lock(&levelMutex);
+                score += 200 * currentLevel; // Increment score
+                pthread_mutex_unlock(&levelMutex);
                 pthread_mutex_unlock(&scoreMutex);
                 pthread_mutex_lock(&soundMutex);
                 eatGhost.play();
@@ -2106,7 +2115,9 @@ int main()
         window.clear();
         drawGrid(window);
         // Update and display level
+        pthread_mutex_lock(&levelMutex);
         levelText.setString("Level: " + std::to_string(currentLevel));
+        pthread_mutex_unlock(&levelMutex);
         // Update and display score
         pthread_mutex_lock(&scoreMutex);
         scoreText.setString("Score: " + std::to_string(score));
