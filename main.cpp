@@ -30,6 +30,7 @@ pthread_mutex_t keyMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t permitMutex = PTHREAD_MUTEX_INITIALIZER;
 //semaphore for speed boosts
 sem_t speed;
+bool speedStatus[4] = {false,false,false,false};
 // Define game entities
 // Define game grid
 int gameMap[ROWS][COLS] = {0};
@@ -97,7 +98,11 @@ pthread_mutex_t ghost4Mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Shared variable for user input
 Keyboard::Key userInputKey = Keyboard::Unknown;
-
+sf::Sound chomp;
+sf::Sound death;
+sf::Sound powerPellet;
+sf::Sound eatGhost;
+pthread_mutex_t soundMutex = PTHREAD_MUTEX_INITIALIZER;
 //pacman coordinates
 float pacman_x = CELL_SIZE + 25 / 8.0;
 float pacman_y = CELL_SIZE + 25 / 4.0;
@@ -157,7 +162,10 @@ void drawGrid(sf::RenderWindow& window)
 {
     sf::CircleShape pelletShape(5);
     sf::CircleShape powerUpShape(5);
-    sf::RectangleShape wallShape(sf::Vector2f(CELL_SIZE - 1, CELL_SIZE - 1));
+    sf::Texture wallT;
+    wallT.loadFromFile("img/wall_B.png");
+    sf::Sprite wallShape;
+    wallShape.setTexture(wallT);
     for (int i = 0; i < ROWS; i++)
     {
         for (int j = 0; j < COLS; j++)
@@ -187,20 +195,23 @@ void drawGrid(sf::RenderWindow& window)
                 window.draw(powerUpShape);
                 break;
             case 1:
-                // Draw blue rectangle for wall
-                wallShape.setFillColor(sf::Color::Blue);
+                // Draw blue rectangle for fixed wall
+                wallT.loadFromFile("img/wall_B.png");
+                wallShape.setTexture(wallT);
                 wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
                 window.draw(wallShape);
                 break;
             case -1:
-                // Draw blue rectangle for ghost house
-                wallShape.setFillColor(sf::Color::Yellow);
+                // Draw yellow rectangle for ghost house
+                wallT.loadFromFile("img/wall_Y.png");
+                wallShape.setTexture(wallT);
                 wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
                 window.draw(wallShape);
                 break;
             case -2:
-                // Draw blue rectangle for fixed wall
-                wallShape.setFillColor(sf::Color(100, 10, 255));
+                // Draw purple rectangle for fixed wall
+                wallT.loadFromFile("img/wall_P.png");
+                wallShape.setTexture(wallT);
                 wallShape.setPosition(j * CELL_SIZE, i * CELL_SIZE);
                 window.draw(wallShape);
                 break;
@@ -549,6 +560,9 @@ void movePacman(void* arg)
                 pthread_mutex_lock(&gameMapMutex);
                 gameMap[(int)nextY / CELL_SIZE][(int)nextX / CELL_SIZE] = 0;
                 pthread_mutex_unlock(&gameMapMutex);
+                pthread_mutex_lock(&soundMutex);
+                chomp.play();
+                pthread_mutex_unlock(&soundMutex);
             }
         }
         else if(value == 4)
@@ -564,6 +578,9 @@ void movePacman(void* arg)
                 pthread_mutex_unlock(&gameMapMutex);
                 delay = 4000;
                 afraidClock.restart();
+                pthread_mutex_lock(&soundMutex);
+                powerPellet.play();
+                pthread_mutex_unlock(&soundMutex);
             }
             pthread_mutex_unlock(&afraidMutex);
         }
@@ -582,7 +599,7 @@ void movePacman(void* arg)
         if(lives_reset)
         {
             resetPositions(0);
-            allReset++;
+            allReset=1;
             pthread_mutex_unlock(&livesResetMutex);
             continue;
         }
@@ -591,7 +608,8 @@ void movePacman(void* arg)
 }
 
 
-void handleLevelChange() {
+void handleLevelChange() 
+{
     bool levelComplete = true;
     pthread_mutex_lock(&gameMapMutex);
     for (int i = 0; i < ROWS; i++) {
@@ -608,7 +626,7 @@ void handleLevelChange() {
     pthread_mutex_unlock(&gameMapMutex);
     if (levelComplete) {
         currentLevel++;  // Increment the level counter
-        cout<<"level "<<currentLevel<<endl;
+        //cout<<"level "<<currentLevel<<endl;
         initializeGameBoard();  // Reset the game board for the next level
         resetPositions(0);  // Reset Pac-Man position
         // Add any other necessary logic for level change here
@@ -888,15 +906,12 @@ bool tryAcquire(bool& flag)
         if(!acquired)
         {
             cout<<"Starting delayed turn"<<endl;
-            cout<<"Acquired:\t"<<acquired<<endl;
             acquired = true;
             pthread_mutex_lock(&countMutex);
             countG++;
-            cout<<countG<<endl;
             pthread_mutex_unlock(&countMutex);
             flag = 0;
             cout<<"returning function"<<endl;
-            cout<<"Acquired:\t"<<acquired<<endl;
             pthread_mutex_unlock(&acquiredMutex);
             return 1;
         }
@@ -952,40 +967,25 @@ bool tryAcquire(bool& flag)
     }
 }
 
-void resetAquired(sf::Clock& clock, bool& flag) 
+void resetAquired(sf::Clock& clock) 
 {
     // Check if deadlock condition is reached
-    if (clock.getElapsedTime().asSeconds() >= 5 && flag == 1) 
+    if (clock.getElapsedTime().asSeconds() >= 5) 
     {
+        cout<<"Resetting Aqcuired"<<endl;
         pthread_mutex_lock(&acquiredMutex);
         acquired = false; // Reset acquired state
         pthread_mutex_unlock(&acquiredMutex);
         clock.restart(); // Restart the clock
     }
-    // Check if the ghost acquired both resources
-    pthread_mutex_lock(&countMutex);
-    int value = countG;
-    pthread_mutex_unlock(&countMutex);
-    if (value == 2) {
-        // Reset state and release resources
-        pthread_mutex_lock(&acquiredMutex);
-        acquired = true;
-        pthread_mutex_unlock(&acquiredMutex); // Release the lock
-        
-        cout << "Reset" << endl;
-        
-        pthread_mutex_lock(&keyMutex);
-        key = 2; // Release the keys
-        pthread_mutex_unlock(&keyMutex);
-        pthread_mutex_lock(&permitMutex);
-        permit = 2; // Release the permits
-        pthread_mutex_unlock(&permitMutex);
-        pthread_mutex_lock(&countMutex);
-        countG = 0; //reset count
-        pthread_mutex_unlock(&countMutex);
-        flag = 1;
-        clock.restart(); // Restart the clock
-    }
+    /*
+    pthread_mutex_lock(&keyMutex);
+    cout<<"Keys: "<<key<<endl;
+    pthread_mutex_unlock(&keyMutex);
+    pthread_mutex_lock(&permitMutex);
+    cout<<"Permits: "<<permit<<endl;
+    pthread_mutex_unlock(&permitMutex);
+    */
 }
 
 void startWait(sf::Clock& clock, bool& flag) {
@@ -1046,7 +1046,7 @@ bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
 {
     if(!flag && !timeOut[gNum])//not already requested boost
     {
-        cout<<"Boost Requested By: "<<gNum<<endl;
+        //cout<<"Boost Requested By: "<<gNum + 1<<endl;
         pthread_mutex_lock(&speedMutex);
         speedQueue.push({priority,gNum});
         pthread_mutex_unlock(&speedMutex);
@@ -1055,22 +1055,25 @@ bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
     }
     else if(timeOut[gNum])
     {
-        if(clock.getElapsedTime().asSeconds() >= 10 && !flag)//another 5 seconds before requesting again
+        if(clock.getElapsedTime().asSeconds() >= 8 && !flag)//another 5 seconds before requesting again
         {
             timeOut[gNum] = false;
             return false;
         }
         else if(clock.getElapsedTime().asSeconds() >= 5 && flag)//timeout boost after 5 seconds
         {
-            cout<<"Speed boost Timed out by: "<<gNum<<endl;
+            //cout<<"Speed boost Timed out by: "<<gNum + 1<<endl;
             pthread_mutex_lock(&speedMutex);
             boosts++;
-            cout<<"Boosts remaining: "<<boosts<<endl;
+            speedStatus[gNum] = false;
+            //cout<<"Boosts remaining: "<<boosts<<endl;
             pthread_mutex_unlock(&speedMutex);
             flag = 0;
             return false;
         }
-        return true;
+        if(flag)
+            return true;
+        return false;
     }
     else
     {
@@ -1080,11 +1083,12 @@ bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
         {
             if(boosts > 0)
             {
-                cout<<"Speed boost Attained by: "<<gNum<<endl;
+                //cout<<"Speed boost Attained by: "<<gNum + 1<<endl;
                 speedQueue.pop();
                 boosts--;
-                cout<<"Boosts remaining: "<<boosts<<endl;
+                //cout<<"Boosts remaining: "<<boosts<<endl;
                 timeOut[gNum] = true;
+                speedStatus[gNum] = true;
                 pthread_mutex_unlock(&speedMutex);
                 clock.restart();
                 return true;
@@ -1103,7 +1107,7 @@ bool requestSpeedBoost(int gNum,int priority,bool& flag,Clock& clock)
     }
 }
 //house wait function
-void houseWait(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos,bool& flag)
+void houseWait(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos,bool& flag,sf::Clock& keyPermitClock)
 {
     bool reset = true;
     while(reset)
@@ -1118,6 +1122,7 @@ void houseWait(sf::Clock& clock, sf::Sprite* ghost_shape,int& pos,bool& flag)
         bob(clock, ghost_shape,pos);
         if(tryAcquire(flag))
         {
+            keyPermitClock.restart();
             break;
         }
         pthread_mutex_lock(&closedMutex);
@@ -1153,6 +1158,8 @@ void moveGhost1(void* arg) { // smart movement
     sf::Sprite* ghost_shape = (sf::Sprite*)args[1];
     sf::Texture ghostTexture;
     sf::Clock clock;
+    sf::Clock keyPermitClock;
+    bool postFlag = false;
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     // bob up and down while waiting for key
     int pos = 25;
@@ -1162,7 +1169,7 @@ void moveGhost1(void* arg) { // smart movement
     bool timeFlag1 = false;
     pair<float,float> offset = {25/8,25/4};
     ///////////////////////////////////////////////////////////////////////----------------House
-    houseWait(clock, ghost_shape,pos,flag);
+    houseWait(clock, ghost_shape,pos,flag,keyPermitClock);
     ///////////////////////////////////////////////////////////////////////----------------Outside
     pthread_mutex_lock(&afraidMutex);
     if(afraid)
@@ -1173,15 +1180,30 @@ void moveGhost1(void* arg) { // smart movement
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     while(1)
     {
+        if(!postFlag && keyPermitClock.getElapsedTime().asSeconds() >= 5)
+        {
+            cout<<"Key and Permit Released by Ghost "<<gNum<<endl;
+            pthread_mutex_lock(&keyMutex);
+            key++;
+            pthread_mutex_unlock(&keyMutex);
+            pthread_mutex_lock(&permitMutex);
+            permit++;
+            pthread_mutex_unlock(&permitMutex);
+            postFlag = true;
+        }
         pthread_mutex_lock(&afraidMutex);
         bool afraidLocal = afraid;
         pthread_mutex_unlock(&afraidMutex);
         if(!afraidLocal)
         {
-            if(requestSpeedBoost(gNum,1,speed,clock))
-                delay = 5000;
+            if(requestSpeedBoost(gNum-1,1,speed,clock))
+            {
+                delay = 6000;
+            }
             else
-                delay = 7000;
+            {
+                delay = 50000;
+            }
         }
         pthread_mutex_lock(&closedMutex);
         if(closed)
@@ -1214,6 +1236,15 @@ void moveGhost1(void* arg) { // smart movement
                 ghost_shape->setScale(1.7,1.7);
                 offset = {-7.5,-10};
                 delay = 8000;
+                pthread_mutex_lock(&speedMutex);
+                if(speedStatus[gNum - 1])
+                {
+                    boosts++;
+                    speedStatus[gNum - 1] = false;
+                    //cout<<"Boosts remaining: "<<boosts<<endl;
+                    speed = false;
+                }
+                pthread_mutex_unlock(&speedMutex);
             }
             nextX = nextMove.first;
             nextY = nextMove.second;
@@ -1228,16 +1259,32 @@ void moveGhost1(void* arg) { // smart movement
                 score += 200; // Increment score
                 pthread_mutex_unlock(&scoreMutex);
                 resetPositions(gNum);
+                pthread_mutex_lock(&soundMutex);
+                eatGhost.play();
+                pthread_mutex_unlock(&soundMutex);
                 changeEyes(ghostTexture,ghost_shape,diffX,diffY,gNum);
                 ghost_shape->setScale(1,1);
                 offset = {25/8,25/4};
                 ghost_shape->setPosition(ghostX + offset.first, ghostY + offset.second);
-                pthread_mutex_lock(&livesResetMutex);
-                allReset++;
-                pthread_mutex_unlock(&livesResetMutex);
                 pos = 25;
                 flag = 0;
-                houseWait(clock, ghost_shape,pos,flag);
+                pthread_mutex_lock(&countMutex);
+                countG--;
+                pthread_mutex_unlock(&countMutex);
+                if(!postFlag)
+                {
+                    cout<<"Key and Permit Released by Ghost "<<gNum<<endl;
+                    pthread_mutex_lock(&keyMutex);
+                    key++;
+                    pthread_mutex_unlock(&keyMutex);
+                    pthread_mutex_lock(&permitMutex);
+                    permit++;
+                    pthread_mutex_unlock(&permitMutex);
+                    postFlag = true;
+                }
+                houseWait(clock, ghost_shape,pos,flag,keyPermitClock);
+                postFlag = false;
+                
                 pthread_mutex_lock(&afraidMutex);
                 if(afraid)
                     timeFlag1 = true;
@@ -1275,6 +1322,9 @@ void moveGhost1(void* arg) { // smart movement
                     pthread_mutex_lock(&livesResetMutex);
                     lives_reset = true;
                     pthread_mutex_unlock(&livesResetMutex);
+                    pthread_mutex_lock(&soundMutex);
+                    death.play();
+                    pthread_mutex_unlock(&soundMutex);
                 }
                 else
                 {
@@ -1296,14 +1346,37 @@ void moveGhost1(void* arg) { // smart movement
         pthread_mutex_lock(&livesResetMutex);
         if(lives_reset)
         {
+            pthread_mutex_lock(&speedMutex);
+            if(speedStatus[gNum-1])
+            {
+                boosts++;
+                speedStatus[gNum-1] = false;
+                //cout<<"Boosts remaining: "<<boosts<<endl;
+                speed = false;
+            }
+            pthread_mutex_unlock(&speedMutex);
             cout<<"Resetting"<<endl;
             resetPositions(gNum);
             ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-            allReset++;
             pthread_mutex_unlock(&livesResetMutex);
+            pthread_mutex_lock(&countMutex);
+            countG--;
+            pthread_mutex_unlock(&countMutex);
             pos = 25;
             flag = 0;
-            houseWait(clock, ghost_shape,pos,flag);
+            cout<<"Key and Permit Released by Ghost "<<gNum<<endl;
+            if(!postFlag)
+            {
+                pthread_mutex_lock(&keyMutex);
+                key++;
+                pthread_mutex_unlock(&keyMutex);
+                pthread_mutex_lock(&permitMutex);
+                permit++;
+                pthread_mutex_unlock(&permitMutex);
+                postFlag = true;
+            }
+            houseWait(clock, ghost_shape,pos,flag,keyPermitClock);
+            postFlag = false;
             pthread_mutex_lock(&afraidMutex);
             if(afraid)
                 timeFlag1 = true;
@@ -1327,16 +1400,18 @@ void moveGhost2(void* arg)
     sf::Texture ghostTexture;
     pair<int,int> direction =  {0,-1}; // Random initial direction
     sf::Clock clock;
+    sf::Clock keyPermitClock;
     ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4); // Adjust position based on sprite size
     int pos = 25;
     bool flag = 0; // flag to know it has acquired
     bool speed = false;
     int priority = (gNum == 2 ? 2 : 3);
     int delay = 10000;
+    bool postFlag = false;
     bool timeFlag1 = false;
     pair<float,float> offset = {25/8,25/4};
     ///////////////////////////////////////////////////////////////////////----------------House
-    houseWait(clock, ghost_shape,pos,flag);
+    houseWait(clock, ghost_shape,pos,flag,keyPermitClock);
     ///////////////////////////////////////////////////////////////////////----------------Outside
     pthread_mutex_lock(&afraidMutex);
     if(afraid)
@@ -1346,15 +1421,26 @@ void moveGhost2(void* arg)
     pthread_mutex_unlock(&afraidMutex);
     while(1)
     {
+        if(!postFlag && keyPermitClock.getElapsedTime().asSeconds() >= 5)
+        {
+            cout<<"Key and Permit Released by Ghost "<<gNum<<endl;
+            pthread_mutex_lock(&keyMutex);
+            key++;
+            pthread_mutex_unlock(&keyMutex);
+            pthread_mutex_lock(&permitMutex);
+            permit++;
+            pthread_mutex_unlock(&permitMutex);
+            postFlag = true;
+        }
         pthread_mutex_lock(&afraidMutex);
         bool afraidLocal = afraid;
         pthread_mutex_unlock(&afraidMutex);
         if(!afraidLocal)
         {
-            if(requestSpeedBoost(gNum,priority,speed,clock))
-                delay = 5000;
+            if(requestSpeedBoost(gNum-1,priority,speed,clock))
+                delay = 6000;
             else
-                delay = 8000;
+                delay = 50000;
         }
         pthread_mutex_lock(&closedMutex);
         if(closed)
@@ -1439,6 +1525,10 @@ void moveGhost2(void* arg)
                     pthread_mutex_lock(&livesResetMutex);
                     lives_reset = true;
                     pthread_mutex_unlock(&livesResetMutex);
+                    pthread_mutex_lock(&soundMutex);
+                    death.play();
+                    pthread_mutex_unlock(&soundMutex);
+                    
                 }
                 else
                 {
@@ -1464,6 +1554,17 @@ void moveGhost2(void* arg)
                 ghost_shape->setScale(1.7,1.7);
                 offset = {-7.5,-10};
                 timeFlag1 = false;
+                delay = 8000;
+                //give away boost if it has one
+                pthread_mutex_lock(&speedMutex);
+                if(speedStatus[gNum-1])
+                {
+                    boosts++;
+                    speedStatus[gNum-1] = false;
+                    //cout<<"Boosts remaining: "<<boosts<<endl;
+                    speed = false;
+                }
+                pthread_mutex_unlock(&speedMutex);
             }
             if((round(pacX) == round(ghostX/CELL_SIZE) && round(pacY) == round(ghostY/CELL_SIZE)) || (round(pacX) == round(nextMoveX/CELL_SIZE) && round(pacY) == (nextMoveY/CELL_SIZE)))
             {
@@ -1472,16 +1573,31 @@ void moveGhost2(void* arg)
                 pthread_mutex_lock(&scoreMutex);
                 score += 200; // Increment score
                 pthread_mutex_unlock(&scoreMutex);
+                pthread_mutex_lock(&soundMutex);
+                eatGhost.play();
+                pthread_mutex_unlock(&soundMutex);
                 changeEyes2(direction,ghost_shape,ghostTexture,gNum);
                 ghost_shape->setScale(1,1);
                 offset = {25/8,25/4};
                 ghost_shape->setPosition(ghostX + offset.first, ghostY + offset.second);
-                pthread_mutex_lock(&livesResetMutex);
-                allReset++;
-                pthread_mutex_unlock(&livesResetMutex);
                 pos = 25;
                 flag = 0;
-                houseWait(clock, ghost_shape,pos,flag);
+                pthread_mutex_lock(&countMutex);
+                countG--;
+                pthread_mutex_unlock(&countMutex);
+                if(!postFlag)
+                {
+                    cout<<"Key and Permit Released by Ghost "<<gNum<<endl;
+                    pthread_mutex_lock(&keyMutex);
+                    key++;
+                    pthread_mutex_unlock(&keyMutex);
+                    pthread_mutex_lock(&permitMutex);
+                    permit++;
+                    pthread_mutex_unlock(&permitMutex);
+                    postFlag = true;
+                }
+                houseWait(clock, ghost_shape,pos,flag,keyPermitClock);
+                postFlag = false;
                 pthread_mutex_lock(&afraidMutex);
                 if(afraid)
                     timeFlag1 = true;
@@ -1500,14 +1616,37 @@ void moveGhost2(void* arg)
         pthread_mutex_lock(&livesResetMutex);
         if(lives_reset)
         {
+            pthread_mutex_lock(&speedMutex);
+            if(speedStatus[gNum-1])
+            {
+                boosts++;
+                speedStatus[gNum-1] = false;
+                //cout<<"Boosts remaining: "<<boosts<<endl;
+                speed = false;
+            }
+            pthread_mutex_unlock(&speedMutex);
             cout<<"Resetting"<<endl;
             resetPositions(gNum);
             ghost_shape->setPosition(ghostX + 25/8, ghostY + 25/4);
-            allReset++;
             pthread_mutex_unlock(&livesResetMutex);
             pos = 25;
             flag = 0;
-            houseWait(clock, ghost_shape,pos,flag);
+            pthread_mutex_lock(&countMutex);
+            countG--;
+            pthread_mutex_unlock(&countMutex);
+            if(!postFlag)
+            {
+                cout<<"Key and Permit Released by Ghost "<<gNum<<endl;
+                pthread_mutex_lock(&keyMutex);
+                key++;
+                pthread_mutex_unlock(&keyMutex);
+                pthread_mutex_lock(&permitMutex);
+                permit++;
+                pthread_mutex_unlock(&permitMutex);
+                postFlag = true;
+            }
+            houseWait(clock, ghost_shape,pos,flag,keyPermitClock);
+            postFlag = false;
             pthread_mutex_lock(&afraidMutex);
             if(afraid)
                 timeFlag1 = true;
@@ -1531,7 +1670,7 @@ void restartLives(sf::Clock& clock,bool& flag)
 {
     pthread_mutex_lock(&livesResetMutex);
     pthread_mutex_lock(&countMutex);
-    if(allReset >= countG + 1)
+    if(allReset == 1 && countG == 0)
     {
         allReset = 0;
         clock.restart();
@@ -1593,6 +1732,47 @@ void saveHighScore()
         file.close();
     }
 }
+//draw tiny ghosts above highscore to display status
+void drawTinyGhosts(sf::RenderWindow& window, sf::Sprite& ghost1, sf::Sprite& ghost2, sf::Sprite& ghost3, sf::Sprite& ghost4)
+{
+    window.draw(ghost1);
+    window.draw(ghost2);
+    window.draw(ghost3);
+    window.draw(ghost4);
+    //////
+    Texture bolt;
+    bolt.loadFromFile("img/speed.png");
+    Sprite boltSprite(bolt);
+    //////
+    Texture afraidT;
+    afraidT.loadFromFile("img/a.png");
+    Sprite afraidSprite(afraidT);
+    afraidSprite.setScale(1.7,1.7);
+    // check for afraid status
+    pthread_mutex_lock(&afraidMutex);
+    if (afraid)
+    {
+        for(int i=0;i<4;i++)
+        {
+            afraidSprite.setPosition(540 + (i*50), 835);
+            window.draw(afraidSprite);
+        }
+        pthread_mutex_unlock(&afraidMutex);
+        return;
+    }
+    pthread_mutex_unlock(&afraidMutex);
+    /// check for boost status
+    pthread_mutex_lock(&speedMutex);
+    for(int i = 0 ; i < 4 ; i++)
+    {
+        if(speedStatus[i])
+        {
+            boltSprite.setPosition(545 + (i*50), 840);
+            window.draw(boltSprite);
+        }
+    }
+    pthread_mutex_unlock(&speedMutex);
+}
 
 // Main function
 int main()
@@ -1623,41 +1803,49 @@ int main()
     playText.setCharacterSize(32);
     playText.setFillColor(sf::Color::Red);
     playText.setString("Play");
-    playText.setPosition(250, 190); // Adjust position as needed
+    playText.setPosition(250, 290); // Adjust position as needed
 
     sf::Text instructionText;
     instructionText.setFont(menuFont);
     instructionText.setCharacterSize(32);
     instructionText.setFillColor(sf::Color::Red);
     instructionText.setString("Instructions");
-    instructionText.setPosition(250, 250); // Adjust position as needed
+    instructionText.setPosition(250, 350); // Adjust position as needed
 
     sf::Text musicText;
     musicText.setFont(menuFont);
     musicText.setCharacterSize(32);
     musicText.setFillColor(sf::Color::Red);
     musicText.setString("Music: On"); // Initially set to "On"
-    musicText.setPosition(250, 310); // Adjust position as needed
+    musicText.setPosition(250, 410); // Adjust position as needed
 
     sf::Music music;
-    if (!music.openFromFile("sound/Medieval-Times.ogg"))
-    {
-        std::cerr << "Failed to load music file!" << std::endl;
-        return 1;
-    }
+    music.openFromFile("sound/pacman_beginning.wav");
+    music.setLoop(true); // Make the music loop
     music.play();
+    music.setVolume(30); // Set the volume to 50%
 
-    sf::SoundBuffer scoreSoundBuffer;
-sf::Sound scoreSound;
-  if (!scoreSoundBuffer.loadFromFile("sound/laser.ogg"))
-    {
-        // Handle loading error
-        std::cerr << "Failed to load score increase sound file!" << std::endl;
-        return 1; // Exit the program or handle the error appropriately
-    }
+    sf::SoundBuffer gameOverSoundBuffer;
+    gameOverSoundBuffer.loadFromFile("sound/pacman_death.wav");
+    sf::Sound gameOverSound;
+    gameOverSound.setBuffer(gameOverSoundBuffer);
 
-    // Set the sound buffer for scoreSound
-    scoreSound.setBuffer(scoreSoundBuffer);
+    //set global sound variables buffers
+    sf::SoundBuffer eatSoundBuffer;
+    eatSoundBuffer.loadFromFile("sound/pacman_chomp.wav");
+    chomp.setBuffer(eatSoundBuffer);
+    chomp.setVolume(100);
+
+    sf::SoundBuffer eatFruitSoundBuffer;
+    eatFruitSoundBuffer.loadFromFile("sound/pacman_eatfruit.wav");
+    powerPellet.setBuffer(eatFruitSoundBuffer);
+
+    sf::SoundBuffer eatGhostSoundBuffer;
+    eatGhostSoundBuffer.loadFromFile("sound/pacman_eatghost.wav");
+    eatGhost.setBuffer(eatGhostSoundBuffer);
+
+    death.setBuffer(gameOverSoundBuffer);
+
 
     bool showInstructionImage = false;
     sf::Texture instructionTexture;
@@ -1828,13 +2016,13 @@ sf::Sound scoreSound;
     levelText.setFont(font);
     levelText.setCharacterSize(24);
     levelText.setFillColor(sf::Color::White);
-    levelText.setPosition(300, 850);
+    levelText.setPosition(300, 870);
     //highscore text
     sf::Text highscoreText;
     highscoreText.setFont(font);
     highscoreText.setCharacterSize(24);
     highscoreText.setFillColor(sf::Color::White);
-    highscoreText.setPosition(500, 850);
+    highscoreText.setPosition(500, 870);
     //get highscore
     std::ifstream file("highscore.txt");
     int highscore;
@@ -1882,7 +2070,6 @@ sf::Sound scoreSound;
     args4[1] = &ghost4;
     pthread_create(&ghostThread4, nullptr, (void* (*)(void*))moveGhost2, args4);
     Clock clock;
-    bool flag = 1;
     bool flag2 = 1;
 
     // Load heart texture
@@ -1896,6 +2083,16 @@ sf::Sound scoreSound;
     // Create heart sprite
     sf::Sprite heartSprite(heartTexture);
     heartSprite.setPosition(10, 800);
+
+    //seperate ghost sprites for ghosts statuses
+    sf::Sprite ghost1S(ghostTexture1);
+    ghost1S.setPosition(550, 810);
+    sf::Sprite ghost2S(ghostTexture2);
+    ghost2S.setPosition(600, 810);
+    sf::Sprite ghost3S(ghostTexture3);
+    ghost3S.setPosition(650, 810);
+    sf::Sprite ghost4S(ghostTexture4);
+    ghost4S.setPosition(700, 810);
 
     // Main loop
     while (window.isOpen())
@@ -1922,20 +2119,21 @@ sf::Sound scoreSound;
         window.draw(ghost4); // Draw the ghost
         window.draw(pacman_shape);                     // Draw the player (yellow circle)
         drawLives(window, heartSprite);
+        drawTinyGhosts(window, ghost1S, ghost2S, ghost3S, ghost4S);
         window.draw(highscoreText);
         window.draw(levelText);
         // Check for level change
         handleLevelChange();
            bool gameOverDisplayed = false;
 
-  if (!gameOverDisplayed && lives <= 0)
+        if (!gameOverDisplayed && lives <= 0)
         {
             sf::Text gameOverText;
             gameOverText.setFont(font);
             gameOverText.setCharacterSize(64);
             gameOverText.setFillColor(sf::Color::Red);
             gameOverText.setString("Game Over");
-             scoreSound.play();
+            gameOverSound.play();
             gameOverText.setPosition(200, 400);
             window.draw(gameOverText);
             window.display(); // Ensure the text is displayed before sleep
@@ -1947,7 +2145,7 @@ sf::Sound scoreSound;
         }
         //check for if a ghost has aquired both key and permit
         if(!flag2)
-            resetAquired(clock,flag);
+            resetAquired(clock);
 
         window.display();
         pthread_mutex_lock(&closedMutex);
@@ -1987,4 +2185,3 @@ sf::Sound scoreSound;
     sem_destroy(&speed);
     return 0;
 }
-
